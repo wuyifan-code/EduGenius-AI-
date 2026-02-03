@@ -1,0 +1,7 @@
+{
+  "name": "EduGenius AI - 智能教育助手",
+  "description": "基于Gemini API的智能教育平台。辅助老师生成教案与教学分析，协助学生制定个性化学习计划并提供AI辅导。",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
