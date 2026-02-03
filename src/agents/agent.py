@@ -33,6 +33,51 @@ from tools.teaching_resource_tool import (
     get_teacher_resources,
     get_resources_by_subject
 )
+# 新工具导入
+from tools.storage_tool import (
+    upload_file_to_storage,
+    download_file_from_storage,
+    delete_file_from_storage,
+    generate_file_url
+)
+from tools.search_tool import (
+    search_teaching_resources,
+    search_latest_materials,
+    search_with_summary
+)
+from tools.image_generation_tool import (
+    generate_chart_image,
+    generate_diagram,
+    generate_visual_material
+)
+from tools.knowledge_tool import (
+    add_to_knowledge_base,
+    add_url_to_knowledge_base,
+    search_knowledge_base
+)
+from tools.voice_tool import (
+    text_to_speech,
+    speech_to_text,
+    generate_lesson_audio,
+    generate_storytelling_audio
+)
+from tools.homework_tool import (
+    create_homework,
+    submit_homework,
+    grade_homework,
+    get_student_homeworks
+)
+from tools.online_test_tool import (
+    create_online_test,
+    add_test_question,
+    submit_answer,
+    get_test_results
+)
+from tools.learning_report_tool import (
+    generate_learning_report,
+    get_student_reports,
+    generate_trend_report
+)
 
 LLM_CONFIG = "config/agent_llm_config.json"
 
@@ -97,6 +142,50 @@ def build_agent(ctx=None):
         create_teaching_resource,
         get_teacher_resources,
         get_resources_by_subject,
+        
+        # 对象存储工具
+        upload_file_to_storage,
+        download_file_from_storage,
+        delete_file_from_storage,
+        generate_file_url,
+        
+        # 联网搜索工具
+        search_teaching_resources,
+        search_latest_materials,
+        search_with_summary,
+        
+        # 生图工具
+        generate_chart_image,
+        generate_diagram,
+        generate_visual_material,
+        
+        # 知识库工具
+        add_to_knowledge_base,
+        add_url_to_knowledge_base,
+        search_knowledge_base,
+        
+        # 语音工具
+        text_to_speech,
+        speech_to_text,
+        generate_lesson_audio,
+        generate_storytelling_audio,
+        
+        # 作业工具
+        create_homework,
+        submit_homework,
+        grade_homework,
+        get_student_homeworks,
+        
+        # 在线测试工具
+        create_online_test,
+        add_test_question,
+        submit_answer,
+        get_test_results,
+        
+        # 学习报告工具
+        generate_learning_report,
+        get_student_reports,
+        generate_trend_report,
     ]
     
     return create_agent(
