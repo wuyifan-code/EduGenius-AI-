@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, User, Bot, Loader2, Sparkles, BookOpen, Brain, PartyPopper, Mic, MicOff } from 'lucide-react';
-import { getChatModel } from '../services/geminiService';
-import { Chat, GenerateContentResponse } from "@google/genai";
+import { getChatModel, ChatModel, ChatChunk } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -34,7 +33,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ role, title }) => 
   const [mode, setMode] = useState<ChatMode>('academic');
   const [isListening, setIsListening] = useState(false);
   
-  const chatRef = useRef<Chat | null>(null);
+  const chatRef = useRef<ChatModel | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -130,7 +129,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ role, title }) => 
       setMessages(prev => [...prev, { id: botMsgId, role: 'model', text: '' }]);
 
       for await (const chunk of resultStream) {
-        const c = chunk as GenerateContentResponse;
+        const c = chunk as ChatChunk;
         if (c.text) {
           fullResponse += c.text;
           setMessages(prev => 
@@ -163,7 +162,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ role, title }) => 
           <div>
             <h3 className="font-bold text-slate-800">{title}</h3>
             <span className="text-xs text-slate-500 flex items-center gap-1">
-              <Sparkles className="w-3 h-3" /> Gemini 3.0 Flash
+              <Sparkles className="w-3 h-3" /> 通义千问
             </span>
           </div>
         </div>
@@ -199,84 +198,66 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ role, title }) => 
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+            className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}
           >
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-              msg.role === 'user' ? 'bg-indigo-600' : (mode === 'fun' ? 'bg-amber-500' : 'bg-emerald-600')
-            }`}>
-              {msg.role === 'user' 
-                ? <User className="w-5 h-5 text-white" /> 
-                : (mode === 'fun' ? <PartyPopper className="w-4 h-4 text-white" /> : <Brain className="w-5 h-5 text-white" />)
-              }
-            </div>
-            <div className={`max-w-[85%] p-3 px-4 rounded-xl text-sm shadow-sm overflow-hidden border ${
-              msg.role === 'user' 
-                ? 'bg-indigo-600 text-white border-indigo-600 rounded-tr-none' 
-                : 'bg-white text-slate-800 border-slate-200 rounded-tl-none'
-            }`}>
-              {/* Markdown and Math Renderer */}
-              <div className={`prose ${
-                  msg.role === 'user' ? 'prose-invert' : 'prose-slate'
-                } max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0 break-words leading-relaxed`}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkMath, remarkGfm]}
-                  rehypePlugins={[rehypeKatex]}
-                  components={{
-                    p: ({node, ...props}) => <p className="mb-1 last:mb-0" {...props} />
-                  }}
-                >
-                  {msg.text}
-                </ReactMarkdown>
+            {msg.role === 'model' && (
+              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                role === 'teacher' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'
+              }`}>
+                <Bot className="w-5 h-5" />
               </div>
+            )}
+            <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
+              msg.role === 'user'
+                ? 'bg-blue-600 text-white rounded-tr-none'
+                : 'bg-white text-slate-800 rounded-tl-none border border-slate-200'
+            }`}>
+              <ReactMarkdown
+                className="prose prose-sm max-w-none dark:prose-invert"
+                remarkPlugins={[remarkMath, remarkGfm]}
+                rehypePlugins={[rehypeKatex]}
+              >
+                {msg.text}
+              </ReactMarkdown>
             </div>
+            {msg.role === 'user' && (
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                <User className="w-5 h-5" />
+              </div>
+            )}
           </div>
         ))}
-        {isLoading && (
-          <div className="flex items-center gap-2 text-slate-400 text-sm ml-12">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            AI正在{mode === 'fun' ? '酝酿有趣的回答' : '严谨思考'}...
-          </div>
-        )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-white border-t border-slate-200 flex-shrink-0 z-20 w-full relative">
-        <div className="max-w-4xl mx-auto flex gap-2">
-          {/* Voice Input Button */}
+      <div className="p-4 bg-white border-t border-slate-200 flex-shrink-0">
+        <div className="flex items-center gap-3">
           <button
             onClick={toggleVoiceInput}
-            className={`p-3 rounded-xl transition-all flex items-center justify-center shadow-sm ${
-              isListening 
-                ? 'bg-rose-50 text-rose-600 border border-rose-200 animate-pulse ring-2 ring-rose-200' 
-                : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100 hover:text-slate-700'
-            }`}
-            title="语音输入"
+            className={`p-2 rounded-full transition-colors ${isListening ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            title={isListening ? "停止录音" : "语音输入"}
           >
-            {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
-
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder={
-              role === 'teacher' 
-               ? (mode === 'academic' ? (isListening ? "正在听您说..." : "输入教学指令（学术模式）...") : (isListening ? "正在听您说..." : "输入教学创意（趣味模式）..."))
-               : (mode === 'academic' ? (isListening ? "正在听你说..." : "请教一个学术问题...") : (isListening ? "正在听你说..." : "聊聊有趣的学习话题..."))
-            }
-            className="flex-1 px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm"
-            disabled={isLoading}
-          />
-          <button
-            onClick={handleSend}
-            disabled={isLoading || !input.trim()}
-            className={`text-white px-6 py-3 rounded-xl transition-colors flex items-center justify-center shadow-md hover:shadow-lg ${
-              mode === 'fun' ? 'bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300' : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
-            }`}
-          >
-            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          </button>
+          <div className="flex-1 relative">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder="输入您的问题..."
+              className="w-full p-3 pr-12 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+              rows={1}
+            />
+            <button
+              onClick={handleSend}
+              disabled={isLoading}
+              className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full ${
+                isLoading ? 'bg-slate-200 text-slate-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
       </div>
     </div>

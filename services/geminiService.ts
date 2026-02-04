@@ -1,7 +1,15 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { LessonPlan, LearningTask, StudentProfile } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+const MODEL_CHAT = 'qwen-plus';
+
+const getApiKey = () => {
+  const apiKey = import.meta.env.VITE_DASHSCOPE_API_KEY as string | undefined;
+  if (!apiKey) {
+    throw new Error('Missing VITE_DASHSCOPE_API_KEY');
+  }
+  return apiKey;
+};
 
 // System instructions
 const TEACHER_SYSTEM_PROMPT = `
@@ -38,94 +46,121 @@ const STUDENT_TUTOR_PROMPT = `
 - 块级公式使用双美元符号：$$\\int_0^\\infty x^2 dx$$
 `;
 
+type DashscopeMessage = {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+};
+
+type DashscopeResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+};
+
+const extractJson = (text: string) => {
+  const fencedMatch = text.match(/```json\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  const firstBrace = text.search(/[\[{]/);
+  const lastBrace = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return text.slice(firstBrace, lastBrace + 1).trim();
+  }
+
+  return text.trim();
+};
+
+const requestChatCompletion = async (messages: DashscopeMessage[], options?: { responseFormat?: unknown }) => {
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getApiKey()}`,
+    },
+    body: JSON.stringify({
+      model: MODEL_CHAT,
+      messages,
+      temperature: 0.7,
+      ...(options?.responseFormat ? { response_format: options.responseFormat } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`DashScope API error: ${response.status} ${errorText}`);
+  }
+
+  const data = (await response.json()) as DashscopeResponse;
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('No content returned from DashScope');
+  }
+
+  return content;
+};
+
+export interface ChatChunk {
+  text?: string;
+}
+
+export interface ChatModel {
+  sendMessageStream: (params: { message: string }) => AsyncIterable<ChatChunk>;
+}
+
 export const generateLessonPlan = async (
   topic: string,
   grade: string,
   subject: string
 ): Promise<LessonPlan> => {
-  const prompt = `为${grade}${subject}课创建一个详细的教案。具体主题是“${topic}”。请确保所有内容都用中文输出。`;
+  const prompt = `为${grade}${subject}课创建一个详细的教案。具体主题是“${topic}”。请确保所有内容都用中文输出。\n\n请仅输出符合以下字段的JSON对象：title, gradeLevel, subject, duration, objectives, materials, activities, assessment。`;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: prompt,
-    config: {
-      systemInstruction: TEACHER_SYSTEM_PROMPT,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          gradeLevel: { type: Type.STRING },
-          subject: { type: Type.STRING },
-          duration: { type: Type.STRING },
-          objectives: { type: Type.ARRAY, items: { type: Type.STRING } },
-          materials: { type: Type.ARRAY, items: { type: Type.STRING } },
-          activities: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                time: { type: Type.STRING },
-                description: { type: Type.STRING },
-              },
-            },
-          },
-          assessment: { type: Type.STRING },
-        },
-      },
-    },
-  });
+  const responseText = await requestChatCompletion(
+    [
+      { role: 'system', content: TEACHER_SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
+    { responseFormat: { type: 'json_object' } }
+  );
 
-  if (!response.text) {
-    throw new Error("Failed to generate lesson plan");
-  }
-
-  return JSON.parse(response.text) as LessonPlan;
+  const jsonText = extractJson(responseText);
+  return JSON.parse(jsonText) as LessonPlan;
 };
 
 export const generateLearningPlan = async (profile: StudentProfile): Promise<LearningTask[]> => {
   const prompt = `
     为${profile.name}制定一个为期4周的个性化学习计划。
     年级：${profile.grade}
-    优势：${profile.strengths.join(", ")}
-    弱点：${profile.weaknesses.join(", ")}
-    兴趣：${profile.interests.join(", ")}
-    
+    优势：${profile.strengths.join(', ')}
+    弱点：${profile.weaknesses.join(', ')}
+    兴趣：${profile.interests.join(', ')}
+
     计划应侧重于改善弱点，同时利用优势和兴趣。请确保所有内容都用中文输出。
+    请仅输出JSON数组，每一项包含week, focus, tasks, resources字段。
   `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            week: { type: Type.INTEGER },
-            focus: { type: Type.STRING },
-            tasks: { type: Type.ARRAY, items: { type: Type.STRING } },
-            resources: { type: Type.ARRAY, items: { type: Type.STRING } },
-          }
-        }
-      }
-    }
-  });
+  const responseText = await requestChatCompletion([
+    { role: 'system', content: TEACHER_SYSTEM_PROMPT },
+    { role: 'user', content: prompt },
+  ]);
 
-  if (!response.text) {
-    throw new Error("Failed to generate learning plan");
-  }
-
-  return JSON.parse(response.text) as LearningTask[];
+  const jsonText = extractJson(responseText);
+  return JSON.parse(jsonText) as LearningTask[];
 };
 
-export const getChatModel = (role: 'teacher' | 'student') => {
-  return ai.chats.create({
-    model: 'gemini-3-flash-preview',
-    config: {
-      systemInstruction: role === 'teacher' ? TEACHER_SYSTEM_PROMPT : STUDENT_TUTOR_PROMPT,
-    }
-  });
+export const getChatModel = (role: 'teacher' | 'student'): ChatModel => {
+  const systemInstruction = role === 'teacher' ? TEACHER_SYSTEM_PROMPT : STUDENT_TUTOR_PROMPT;
+
+  return {
+    async *sendMessageStream({ message }: { message: string }) {
+      const responseText = await requestChatCompletion([
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: message },
+      ]);
+      yield { text: responseText };
+    },
+  };
 };

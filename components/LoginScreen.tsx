@@ -1,88 +1,76 @@
 import React from 'react';
-import { UserRole } from '../types';
-import { GraduationCap, School, ArrowRight, BookOpenCheck } from 'lucide-react';
+import { GraduationCap, User, BookOpen, Brain } from 'lucide-react';
 
 interface LoginScreenProps {
-  onLogin: (role: UserRole) => void;
+  onSelectRole: (role: 'teacher' | 'student') => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onSelectRole }) => {
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-indigo-200/30 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-emerald-200/30 rounded-full blur-3xl"></div>
-      </div>
-
-      <div className="relative z-10 max-w-5xl w-full">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center p-3 bg-white rounded-2xl shadow-sm mb-6">
-            <div className="bg-indigo-600 p-2 rounded-lg mr-3">
-              <BookOpenCheck className="w-8 h-8 text-white" />
-            </div>
-            <span className="text-3xl font-bold text-slate-800 tracking-tight">EduGenius AI</span>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 text-white flex flex-col">
+      {/* Header */}
+      <header className="py-6 px-8 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="bg-blue-500 p-2 rounded-lg">
+            <GraduationCap className="w-8 h-8" />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">智能教育辅助平台</h1>
-          <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-            基于 Gemini 大模型，为教师提供智能备课支持，为学生定制个性化学习路径。请选择您的身份进入系统。
+          <div>
+            <h1 className="text-2xl font-bold">EduGenius AI</h1>
+            <p className="text-blue-200 text-sm">智能教育助手</p>
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4">
+        <div className="max-w-4xl w-full text-center">
+          <h2 className="text-4xl font-bold mb-4">重新定义教学体验</h2>
+          <p className="text-xl text-blue-100 mb-12">
+            基于国产大模型，为教师提供智能备课支持，为学生定制个性化学习路径。请选择您的身份进入系统。
           </p>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          {/* Teacher Card */}
-          <div 
-            onClick={() => onLogin(UserRole.TEACHER)}
-            className="group bg-white rounded-2xl p-8 md:p-10 shadow-lg hover:shadow-2xl hover:shadow-indigo-200/50 border border-slate-100 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-[100px] -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
-            
-            <div className="relative z-10">
-              <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                <School className="w-8 h-8" />
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Teacher Card */}
+            <div 
+              className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 hover:bg-white/15 transition-all cursor-pointer"
+              onClick={() => onSelectRole('teacher')}
+            >
+              <div className="bg-indigo-500 w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <BookOpen className="w-8 h-8" />
               </div>
-              <h2 className="text-2xl font-bold text-slate-800 mb-3 group-hover:text-indigo-600 transition-colors">我是老师</h2>
-              <p className="text-slate-500 mb-8 leading-relaxed">
-                登录教师端，您可以：
-                <br/>• 一键生成标准化教案
-                <br/>• 分析班级学习数据
-                <br/>• 获得 AI 教学助手支持
+              <h3 className="text-2xl font-bold mb-3">教师入口</h3>
+              <p className="text-blue-100 mb-4">
+                智能教案生成、课堂活动设计、学习成效分析
               </p>
-              <div className="flex items-center text-indigo-600 font-semibold group-hover:translate-x-2 transition-transform">
-                进入教学工作台 <ArrowRight className="w-5 h-5 ml-2" />
-              </div>
+              <button className="bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-lg font-medium transition-colors">
+                进入教师模式
+              </button>
             </div>
-          </div>
 
-          {/* Student Card */}
-          <div 
-            onClick={() => onLogin(UserRole.STUDENT)}
-            className="group bg-white rounded-2xl p-8 md:p-10 shadow-lg hover:shadow-2xl hover:shadow-emerald-200/50 border border-slate-100 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-[100px] -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
-            
-            <div className="relative z-10">
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                <GraduationCap className="w-8 h-8" />
+            {/* Student Card */}
+            <div 
+              className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 hover:bg-white/15 transition-all cursor-pointer"
+              onClick={() => onSelectRole('student')}
+            >
+              <div className="bg-emerald-500 w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Brain className="w-8 h-8" />
               </div>
-              <h2 className="text-2xl font-bold text-slate-800 mb-3 group-hover:text-emerald-600 transition-colors">我是学生</h2>
-              <p className="text-slate-500 mb-8 leading-relaxed">
-                登录学生端，您可以：
-                <br/>• 获取个性化学习计划
-                <br/>• 与 AI 导师一对一辅导
-                <br/>• 追踪学习进度与弱项
+              <h3 className="text-2xl font-bold mb-3">学生入口</h3>
+              <p className="text-blue-100 mb-4">
+                个性化学习计划、AI导师辅导、知识点解析
               </p>
-              <div className="flex items-center text-emerald-600 font-semibold group-hover:translate-x-2 transition-transform">
-                进入学习中心 <ArrowRight className="w-5 h-5 ml-2" />
-              </div>
+              <button className="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-lg font-medium transition-colors">
+                进入学生模式
+              </button>
             </div>
           </div>
         </div>
+      </main>
 
-        <div className="mt-12 text-center">
-           <p className="text-slate-400 text-sm">© 2024 EduGenius AI. Powered by Google Gemini.</p>
-        </div>
-      </div>
+      {/* Footer */}
+      <footer className="py-6 text-center text-blue-200">
+        <p className="text-slate-400 text-sm">© 2024 EduGenius AI. Powered by 通义千问.</p>
+      </footer>
     </div>
   );
 };

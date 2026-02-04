@@ -1,20 +1,24 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# EduGenius AI - 智能教育助手
 
-# Run and deploy your AI Studio app
+一个基于国产大模型的智能教育平台，为教师提供智能备课支持，为学生定制个性化学习路径。
 
-This contains everything you need to run your app locally.
+## 功能特点
 
-View your app in AI Studio: https://ai.studio/apps/drive/1IAXryKIPtZV8BoW2OZOlpFibtUcscWCl
+- 📝 教案生成：快速创建结构化、引人入胜的教案
+- 📊 学习计划：为学生定制个性化的学习路径
+- 💬 AI辅导：实时解答问题，提供学习指导
+- 📈 成效分析：评估学习效果，优化教学策略
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
+## 快速开始
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+   ```bash
+   npm install
+   ```
+
+2. Set the `VITE_DASHSCOPE_API_KEY` in `.env.local` to your DashScope API key
+
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
