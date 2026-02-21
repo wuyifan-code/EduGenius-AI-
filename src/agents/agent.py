@@ -78,6 +78,12 @@ from tools.learning_report_tool import (
     get_student_reports,
     generate_trend_report
 )
+from tools.voice_conversation_tool import (
+    voice_conversation,
+    voice_qa_session,
+    voice_homework_help,
+    get_voice_conversation_guide
+)
 
 LLM_CONFIG = "config/agent_llm_config.json"
 
@@ -186,6 +192,12 @@ def build_agent(ctx=None):
         generate_learning_report,
         get_student_reports,
         generate_trend_report,
+        
+        # 语音对话工具
+        voice_conversation,
+        voice_qa_session,
+        voice_homework_help,
+        get_voice_conversation_guide,
     ]
     
     return create_agent(
