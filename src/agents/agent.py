@@ -103,6 +103,11 @@ from tools.realtime_voice_tool import (
     get_realtime_voice_guide,
     compare_voice_tools
 )
+# 思维链显示控制工具
+from tools.thinking_display_tool import (
+    toggle_thinking_display,
+    get_thinking_status
+)
 
 LLM_CONFIG = "config/agent_llm_config.json"
 
@@ -236,6 +241,10 @@ def build_agent(ctx=None):
         realtime_voice_qa,
         get_realtime_voice_guide,
         compare_voice_tools,
+        
+        # 思维链显示控制工具
+        toggle_thinking_display,
+        get_thinking_status,
     ]
     
     return create_agent(
