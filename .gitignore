@@ -11,4 +11,4 @@ __pycache__/
 /vendor
 *.egg-info/
 /.env
-.env
+.env*.db
