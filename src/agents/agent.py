@@ -97,6 +97,12 @@ from tools.phone_call_tool import (
     get_phone_call_guide,
     check_phone_call_config
 )
+from tools.realtime_voice_tool import (
+    realtime_voice_conversation,
+    realtime_voice_qa,
+    get_realtime_voice_guide,
+    compare_voice_tools
+)
 
 LLM_CONFIG = "config/agent_llm_config.json"
 
@@ -224,6 +230,12 @@ def build_agent(ctx=None):
         make_phone_call_with_ai_assistant,
         get_phone_call_guide,
         check_phone_call_config,
+        
+        # 实时语音对话工具（优化延迟）
+        realtime_voice_conversation,
+        realtime_voice_qa,
+        get_realtime_voice_guide,
+        compare_voice_tools,
     ]
     
     return create_agent(
