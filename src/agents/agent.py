@@ -91,6 +91,12 @@ from tools.question_bank_tool import (
     get_question_by_id,
     get_questions_by_subject
 )
+from tools.phone_call_tool import (
+    make_ai_phone_call,
+    make_phone_call_with_ai_assistant,
+    get_phone_call_guide,
+    check_phone_call_config
+)
 
 LLM_CONFIG = "config/agent_llm_config.json"
 
@@ -212,6 +218,12 @@ def build_agent(ctx=None):
         answer_with_similar_questions,
         get_question_by_id,
         get_questions_by_subject,
+        
+        # 电话通话工具
+        make_ai_phone_call,
+        make_phone_call_with_ai_assistant,
+        get_phone_call_guide,
+        check_phone_call_config,
     ]
     
     return create_agent(
