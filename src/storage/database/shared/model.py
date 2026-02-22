@@ -320,3 +320,32 @@ class KnowledgeBaseEntry(Base):
         Index("ix_knowledge_base_entries_subject", "subject"),
         Index("ix_knowledge_base_entries_table", "knowledge_table"),
     )
+
+
+class QuestionBank(Base):
+    """题库表 - 存储题目和相似题型推荐"""
+    __tablename__ = "question_bank"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, comment="题目ID")
+    subject: Mapped[str] = mapped_column(String(100), nullable=False, comment="学科")
+    grade_level: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, comment="年级")
+    difficulty: Mapped[int] = mapped_column(Integer, default=3, nullable=False, comment="难度等级(1-5)")
+    question_type: Mapped[QuestionTypeEnum] = mapped_column(SQLEnum(QuestionTypeEnum), nullable=False, comment="题目类型")
+    topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="知识点/主题")
+    question_text: Mapped[str] = mapped_column(Text, nullable=False, comment="题目内容")
+    options: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, comment="选项（选择题使用）")
+    correct_answer: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="正确答案")
+    explanation: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="题目解析")
+    tags: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, comment="标签（知识点）")
+    embedding: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, comment="向量表示（用于相似度计算）")
+    usage_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="使用次数")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, comment="是否启用")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, comment="创建时间")
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now(), nullable=True, comment="更新时间")
+
+    __table_args__ = (
+        Index("ix_question_bank_subject", "subject"),
+        Index("ix_question_bank_difficulty", "difficulty"),
+        Index("ix_question_bank_type", "question_type"),
+        Index("ix_question_bank_topic", "topic"),
+    )

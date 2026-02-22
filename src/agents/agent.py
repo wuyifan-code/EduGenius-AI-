@@ -84,6 +84,13 @@ from tools.voice_conversation_tool import (
     voice_homework_help,
     get_voice_conversation_guide
 )
+from tools.question_bank_tool import (
+    add_question_to_bank,
+    search_similar_questions,
+    answer_with_similar_questions,
+    get_question_by_id,
+    get_questions_by_subject
+)
 
 LLM_CONFIG = "config/agent_llm_config.json"
 
@@ -198,6 +205,13 @@ def build_agent(ctx=None):
         voice_qa_session,
         voice_homework_help,
         get_voice_conversation_guide,
+        
+        # 题库工具
+        add_question_to_bank,
+        search_similar_questions,
+        answer_with_similar_questions,
+        get_question_by_id,
+        get_questions_by_subject,
     ]
     
     return create_agent(
