@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:14-alpine
+    container_name: edugenius-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-edugenius}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - edugenius-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis 缓存（可选）
+  redis:
+    image: redis:7-alpine
+    container_name: edugenius-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - edugenius-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # EduGenius AI 应用
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edugenius-app
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      # 数据库配置
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-edugenius}
+
+      # 对象存储配置
+      S3_ENDPOINT: ${S3_ENDPOINT:-https://s3.amazonaws.com}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_REGION: ${S3_REGION:-us-east-1}
+
+      # 阿里云语音服务
+      ALIYUN_ACCESS_KEY: ${ALIYUN_ACCESS_KEY}
+      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET}
+      ALIYUN_APP_KEY: ${ALIYUN_APP_KEY}
+
+      # 大模型配置
+      COZE_INTEGRATION_MODEL_BASE_URL: ${COZE_INTEGRATION_MODEL_BASE_URL}
+
+      # 日志配置
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FILE: /app/work/logs/bypass/app.log
+
+      # 其他配置
+      PYTHONPATH: /app
+      COZE_WORKSPACE_PATH: /app
+    volumes:
+      - ./logs:/app/work/logs/bypass
+      - ./assets:/app/assets
+      - ./tmp:/app/tmp
+      - ./config:/app/config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - edugenius-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: edugenius-nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./assets:/usr/share/nginx/html/assets:ro
+    depends_on:
+      - app
+    networks:
+      - edugenius-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  edugenius-network:
+    driver: bridge
