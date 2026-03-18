@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/app/outputs/
+
+# iOS (Capacitor might generate this)
+ios/
+
+# Environment variables (may contain secrets)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Capacitor
+capacitor.config.ts
+capacitor.config.json
+
+# Misc
+*.log
+*.tmp
+.cache/
