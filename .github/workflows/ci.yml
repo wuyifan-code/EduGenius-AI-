@@ -67,6 +67,23 @@ jobs:
         working-directory: ./server
         run: npm run lint || true
 
+      - name: Run Tests
+        working-directory: ./server
+        run: npm run test --if-present
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: test-secret
+          STRIPE_SECRET_KEY: test-key
+          STRIPE_WEBHOOK_SECRET: test-webhook
+          WECHAT_MCH_ID: test-mch
+          WECHAT_API_KEY: test-key
+
+      - name: Check Test Coverage
+        working-directory: ./server
+        run: npm run test:cov --if-present || true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
       - name: Build
         working-directory: ./server
         run: npm run build
@@ -89,6 +106,8 @@ jobs:
         with:
           context: ./server
           push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # Deploy to Production (only on push to main)
   deploy:

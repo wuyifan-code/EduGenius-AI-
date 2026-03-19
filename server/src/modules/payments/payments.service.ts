@@ -29,7 +29,7 @@ export class PaymentsService {
       throw new BadRequestException('You can only pay for your own orders');
     }
 
-    if (order.paymentStatus === 'PAID') {
+    if (order.paymentStatus === 'COMPLETED') {
       throw new BadRequestException('Order is already paid');
     }
 
