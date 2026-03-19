@@ -26,8 +26,6 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
       passwordPlaceholder: '请输入密码',
       login: '登录',
       agreement: '登录即代表同意《用户协议》和《隐私政策》',
-      patientLogin: '我是患者 (演示入口)',
-      escortLogin: '我是陪诊师 (演示入口)',
       guest: '先逛逛',
       roleSelection: '选择身份',
       patient: '患者',
@@ -45,8 +43,6 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
       passwordPlaceholder: 'Enter password',
       login: 'Login',
       agreement: 'By logging in, you agree to our Terms and Privacy Policy',
-      patientLogin: 'I am a Patient (Demo)',
-      escortLogin: 'I am an Escort (Demo)',
       guest: 'Browse as Guest',
       roleSelection: 'Select Role',
       patient: 'Patient',
@@ -85,12 +81,6 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoLogin = (role: UserRole) => {
-    // 演示登录，使用模拟数据
-    setRole(role);
-    onClose();
   };
 
   return (
@@ -197,23 +187,6 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
           </div>
         </div>
 
-        {/* Demo Roles Footer */}
-        <div className="mt-8 pt-6 border-t border-slate-100">
-           <div className="grid grid-cols-2 gap-4">
-             <button 
-               className="text-teal-600 font-bold text-sm bg-teal-50 py-3 rounded-xl hover:bg-teal-100 transition-colors"
-               onClick={() => handleDemoLogin(UserRole.PATIENT)}
-             >
-               {t.patientLogin}
-             </button>
-             <button 
-                className="text-indigo-600 font-bold text-sm bg-indigo-50 py-3 rounded-xl hover:bg-indigo-100 transition-colors"
-                onClick={() => handleDemoLogin(UserRole.ESCORT)}
-             >
-               {t.escortLogin}
-             </button>
-           </div>
-        </div>
 
       </div>
     </div>

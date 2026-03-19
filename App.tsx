@@ -12,9 +12,9 @@ import { Search, MoreHorizontal, Mail, FileText, Home, Plus, X, Settings as Sett
 import { apiService } from './services/apiService';
 
 // Lazy load heavy components
-const PatientDashboard = lazy(() => import('./components/patient/PatientDashboard').then(m => ({ default: m.PatientDashboard })));
-const EscortDashboard = lazy(() => import('./components/escort/EscortDashboard').then(m => ({ default: m.EscortDashboard })));
-const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const PatientDashboard = lazy(() => import('./components/PatientDashboard').then(m => ({ default: m.PatientDashboard })));
+const EscortDashboard = lazy(() => import('./components/EscortDashboard').then(m => ({ default: m.EscortDashboard })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 
 // Loading fallback
 const PageLoader = () => (

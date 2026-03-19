@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
-interface EscortWithDistance {
+export interface EscortWithDistance {
   id: string;
   name: string;
   rating: number;
