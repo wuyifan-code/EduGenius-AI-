@@ -75,16 +75,42 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang }) => {
   const fetchEscorts = async () => {
     setEscortsLoading(true);
     setEscortsError('');
-    
+
     try {
-      // Mock geolocation for now, in real app we'd use navigator.geolocation
-      const latitude = 39.9042; // Beijing coordinates
-      const longitude = 116.4074;
-      
+      // Use real geolocation API
+      let latitude = 39.9042; // Default: Beijing
+      let longitude = 116.4074;
+
+      if (navigator.geolocation) {
+        await new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              resolve({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+              });
+            },
+            (error) => {
+              console.warn('Geolocation error:', error.message);
+              reject(error);
+            },
+            { timeout: 5000, maximumAge: 300000 }
+          );
+        }).then(
+          (position) => {
+            latitude = position.latitude;
+            longitude = position.longitude;
+          },
+          () => {
+            // Fall back to default if geolocation fails
+          }
+        );
+      }
+
       // Use API service to fetch nearby escorts
       const data = await apiService.getNearbyEscorts(latitude, longitude, 10);
       setEscorts(data);
-      
+
       // If no data returned, set a message
       if (data.length === 0) {
         setEscortsError(t.noEscortsFound);

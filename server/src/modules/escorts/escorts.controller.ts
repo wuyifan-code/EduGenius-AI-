@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, Param, Body, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { EscortsService } from './escorts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -46,5 +46,20 @@ export class EscortsController {
   @ApiOperation({ summary: 'Get escort by ID' })
   async findById(@Param('id') id: string) {
     return this.escortsService.findById(id);
+  }
+
+  @Post('location')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update escort location' })
+  async updateLocation(
+    @Request() req: any,
+    @Body() body: { latitude: number; longitude: number },
+  ) {
+    return this.escortsService.updateLocation(
+      req.user.sub,
+      body.latitude,
+      body.longitude,
+    );
   }
 }

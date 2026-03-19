@@ -103,6 +103,8 @@ model EscortProfile {
   certificateNo   String?  @map("certificate_no")  // 证书编号
   bio             String?
   hourlyRate      Float?   @map("hourly_rate")
+  latitude        Float?   // 纬度
+  longitude       Float?   // 经度
 
   // Relation
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
