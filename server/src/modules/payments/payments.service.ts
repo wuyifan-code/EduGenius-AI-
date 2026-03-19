@@ -95,6 +95,9 @@ export class PaymentsService {
 
   async handleStripeWebhook(body: any, signature: string) {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      throw new BadRequestException('Webhook secret not configured');
+    }
 
     try {
       const event = this.stripe.webhooks.constructEvent(
@@ -106,14 +109,21 @@ export class PaymentsService {
       switch (event.type) {
         case 'payment_intent.succeeded':
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
-          await this.prisma.payment.update({
-            where: { stripePaymentIntentId: paymentIntent.id },
-            data: { status: 'PAID', paidAt: new Date() },
-          });
-          await this.prisma.order.update({
-            where: { payment: { stripePaymentIntentId: paymentIntent.id } },
-            data: { paymentStatus: 'COMPLETED', status: 'CONFIRMED' },
-          });
+          const orderId = paymentIntent.metadata?.orderId;
+
+          if (orderId) {
+            // Update payment record
+            await this.prisma.payment.updateMany({
+              where: { stripePaymentIntentId: paymentIntent.id },
+              data: { status: 'COMPLETED', paidAt: new Date() },
+            });
+
+            // Update order status
+            await this.prisma.order.update({
+              where: { id: orderId },
+              data: { paymentStatus: 'COMPLETED', status: 'CONFIRMED' },
+            });
+          }
           break;
 
         case 'payment_intent.payment_failed':
@@ -215,7 +225,7 @@ export class PaymentsService {
     }
 
     // Only allow refund for paid payments
-    if (payment.status !== 'PAID') {
+    if (payment.status !== 'COMPLETED') {
       throw new BadRequestException('Can only refund paid payments');
     }
 

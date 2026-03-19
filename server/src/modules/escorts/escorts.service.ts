@@ -1,6 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
+interface EscortWithDistance {
+  id: string;
+  name: string;
+  rating: number;
+  completedOrders: number;
+  isCertified: boolean;
+  specialties: string[];
+  imageUrl: string | null | undefined;
+  distance: string | null;
+  distanceValue?: number | null;
+}
+
 @Injectable()
 export class EscortsService {
   constructor(private prisma: PrismaService) {}
@@ -25,7 +37,7 @@ export class EscortsService {
     return degrees * (Math.PI / 180);
   }
 
-  async findAll(query: { latitude?: number; longitude?: number; rating?: number }) {
+  async findAll(query: { latitude?: number; longitude?: number; rating?: number }): Promise<EscortWithDistance[]> {
     const escorts = await this.prisma.escortProfile.findMany({
       where: {
         isVerified: true,
@@ -42,7 +54,7 @@ export class EscortsService {
 
     // If location provided, calculate distances
     if (query.latitude !== undefined && query.longitude !== undefined) {
-      return escorts
+      const withDistance: EscortWithDistance[] = escorts
         .map((escort) => {
           const distance = escort.latitude && escort.longitude
             ? this.calculateDistance(
@@ -66,11 +78,13 @@ export class EscortsService {
                 ? `${Math.round(distance * 1000)}m`
                 : `${distance.toFixed(1)}km`
               : null,
-            distanceValue: distance, // For sorting
+            distanceValue: distance,
           };
         })
-        .filter(e => e.distanceValue === null || e.distanceValue <= 50) // Include escorts within 50km or without location
+        .filter(e => e.distanceValue === null || e.distanceValue <= 50)
         .sort((a, b) => (a.distanceValue ?? Infinity) - (b.distanceValue ?? Infinity));
+
+      return withDistance;
     }
 
     return escorts.map((escort) => ({
@@ -114,7 +128,7 @@ export class EscortsService {
     };
   }
 
-  async findNearby(latitude: number, longitude: number, radiusKm: number = 10) {
+  async findNearby(latitude: number, longitude: number, radiusKm: number = 10): Promise<EscortWithDistance[]> {
     // Get all verified escorts
     const escorts = await this.prisma.escortProfile.findMany({
       where: {
@@ -128,7 +142,7 @@ export class EscortsService {
     });
 
     // Filter by distance and return sorted by distance
-    return escorts
+    const withDistance: EscortWithDistance[] = escorts
       .map((escort) => {
         const distance = escort.latitude && escort.longitude
           ? this.calculateDistance(latitude, longitude, escort.latitude, escort.longitude)
@@ -152,6 +166,8 @@ export class EscortsService {
       })
       .filter(e => e.distanceValue === null || e.distanceValue <= radiusKm)
       .sort((a, b) => (a.distanceValue ?? Infinity) - (b.distanceValue ?? Infinity));
+
+    return withDistance;
   }
 
   async updateLocation(userId: string, latitude: number, longitude: number) {

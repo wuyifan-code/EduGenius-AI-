@@ -17,15 +17,13 @@ export class LoggingInterceptor implements NestInterceptor {
     const ctx = context.switchToHttp();
     const request = ctx.getRequest<Request>();
     const response = ctx.getResponse<Response>();
-    const { method, url, body } = request;
+    const { method, url } = request;
     const startTime = Date.now();
 
     return new Observable((observer) => {
-      observer.next();
-
+      observer.next(undefined);
       observer.complete();
 
-      // Log after response
       response.on('finish', () => {
         const { statusCode } = response;
         const duration = Date.now() - startTime;

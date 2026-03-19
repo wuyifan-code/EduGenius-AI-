@@ -1,7 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Header } from './components/Header';
-import { PatientDashboard } from './components/PatientDashboard';
-import { EscortDashboard } from './components/EscortDashboard';
 import { Login } from './components/Login';
 import { Settings } from './components/Settings';
 import { Explore } from './components/Explore';
@@ -9,10 +7,21 @@ import { Notifications } from './components/Notifications';
 import { Messages } from './components/Messages';
 import { Profile } from './components/Profile';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { AdminDashboard } from './components/AdminDashboard';
 import { UserRole, PageType, Language } from './types';
-import { Search, MoreHorizontal, Mail, FileText, Home, Plus, X, Settings as SettingsIcon, Share, BrainCircuit } from 'lucide-react';
+import { Search, MoreHorizontal, Mail, FileText, Home, Plus, X, Settings as SettingsIcon, Share, BrainCircuit, Loader2 } from 'lucide-react';
 import { apiService } from './services/apiService';
+
+// Lazy load heavy components
+const PatientDashboard = lazy(() => import('./components/patient/PatientDashboard').then(m => ({ default: m.PatientDashboard })));
+const EscortDashboard = lazy(() => import('./components/escort/EscortDashboard').then(m => ({ default: m.EscortDashboard })));
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+
+// Loading fallback
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-screen">
+    <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
+  </div>
+);
 
 const App: React.FC = () => {
   const [role, setRole] = useState<UserRole>(UserRole.GUEST);
@@ -178,7 +187,7 @@ const App: React.FC = () => {
       case 'profile':
         return <Profile lang={lang} role={role} onBack={() => setCurrentPage('home')} />;
       case 'admin':
-        return <AdminDashboard lang={lang} />;
+        return <Suspense fallback={<PageLoader />}><AdminDashboard lang={lang} /></Suspense>;
       case 'saved':
         return <div className="p-10 text-center"><h2 className="text-xl font-bold">Saved functionality coming soon.</h2></div>;
     }
@@ -186,9 +195,9 @@ const App: React.FC = () => {
     // Home feed based on role
     switch (role) {
       case UserRole.PATIENT:
-        return <PatientDashboard lang={lang} />;
+        return <Suspense fallback={<PageLoader />}><PatientDashboard lang={lang} /></Suspense>;
       case UserRole.ESCORT:
-        return <EscortDashboard lang={lang} />;
+        return <Suspense fallback={<PageLoader />}><EscortDashboard lang={lang} /></Suspense>;
       default:
         // Guest View Feed - Styled like tweets but content is promotional
         return (
