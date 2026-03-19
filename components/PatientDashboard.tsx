@@ -97,10 +97,10 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang }) => {
     }
   };
 
-  // Fetch escorts on component mount
+  // Fetch escorts on component mount and when language changes
   useEffect(() => {
     fetchEscorts();
-  }, []);
+  }, [lang]);
 
   const handleAiTriage = async () => {
     if (!symptoms) return;

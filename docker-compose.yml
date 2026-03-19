@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: medimate-db
+    environment:
+      POSTGRES_USER: medimate
+      POSTGRES_PASSWORD: medimate_dev_password
+      POSTGRES_DB: medimate
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medimate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NestJS API 服务器
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: medimate-api
+    environment:
+      DATABASE_URL: postgresql://medimate:medimate_dev_password@postgres:5432/medimate
+      JWT_SECRET: ${JWT_SECRET:-medimate_dev_secret_key_change_in_production}
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    command: npm run start:dev
+
+  # 前端开发服务器 (可选)
+  # frontend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.frontend
+  #   container_name: medimate-frontend
+  #   environment:
+  #     VITE_API_URL: http://localhost:3001/api
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - api
+  #   volumes:
+  #     - .:/app
+  #     - /app/node_modules
+  #   command: npm run dev
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: medimate-network

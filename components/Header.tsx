@@ -1,19 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { UserRole, PageType, Language } from '../types';
-import { 
-  Home, 
-  Search, 
-  Bell, 
-  Mail, 
-  Bookmark, 
-  User, 
+import {
+  Home,
+  Search,
+  Bell,
+  Mail,
+  Bookmark,
+  User,
   MoreHorizontal,
   PenSquare,
   Settings,
   HelpCircle,
   LogOut,
   Stethoscope,
-  FileText
+  FileText,
+  Shield
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -28,7 +29,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setPage, lang, onInteract }) => {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
-  const translations = {
+  const translations = useMemo(() => ({
     zh: {
       home: '大厅',
       explore: '找医院',
@@ -45,7 +46,8 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
       signup: '登录 / 注册',
       guest: '游客',
       escort: '陪诊师',
-      patient: '患者'
+      patient: '患者',
+      admin: '管理后台'
     },
     en: {
       home: 'Lobby',
@@ -63,9 +65,10 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
       signup: 'Sign Up / Login',
       guest: 'Guest',
       escort: 'Escort',
-      patient: 'Patient'
+      patient: 'Patient',
+      admin: 'Admin Panel'
     }
-  };
+  }), []);
 
   const t = translations[lang];
 
@@ -125,14 +128,23 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
             {/* Dropdown Menu */}
             {showMoreMenu && (
               <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.1)] border border-slate-100 overflow-hidden z-50">
-                <div 
+                {role === UserRole.ADMIN && (
+                  <div
+                    className="flex items-center gap-3 p-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                    onClick={() => { setPage('admin'); setShowMoreMenu(false); }}
+                  >
+                    <Shield className="h-5 w-5 text-teal-600" />
+                    <span className="font-bold text-slate-900">{t.admin}</span>
+                  </div>
+                )}
+                <div
                   className="flex items-center gap-3 p-4 hover:bg-slate-50 cursor-pointer transition-colors"
                   onClick={() => { setPage('settings'); setShowMoreMenu(false); }}
                 >
                   <Settings className="h-5 w-5" />
                   <span className="font-bold text-slate-900">{t.settings}</span>
                 </div>
-                <div 
+                <div
                   className="flex items-center gap-3 p-4 hover:bg-slate-50 cursor-pointer transition-colors"
                   onClick={() => { onInteract('Help Center'); setShowMoreMenu(false); }}
                 >

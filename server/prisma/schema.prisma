@@ -1,0 +1,259 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  GUEST
+  PATIENT
+  ESCORT
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  MATCHED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ServiceType {
+  FULL_PROCESS    // 全程陪诊
+  APPOINTMENT    // 代约挂号
+  REPORT_PICKUP  // 代取报告
+  VIP_TRANSPORT  // 专车接送
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+enum PaymentMethod {
+  STRIPE
+  WECHAT
+  ALIPAY
+}
+
+// ==================== MODELS ====================
+
+// 用户表
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(GUEST)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  profile         UserProfile?
+  escortProfile   EscortProfile?
+  ordersAsPatient Order[]       @relation("PatientOrders")
+  ordersAsEscort  Order[]       @relation("EscortOrders")
+  sentMessages    Message[]     @relation("SentMessages")
+  receivedMessages Message[]    @relation("ReceivedMessages")
+  reviewsGiven    Review[]      @relation("ReviewAuthor")
+  reviewsReceived Review[]     @relation("ReviewTarget")
+  notifications   Notification[]
+
+  @@map("users")
+}
+
+// 用户资料表
+model UserProfile {
+  id               String  @id @default(uuid())
+  userId           String  @unique @map("user_id")
+  name             String?
+  phone            String?
+  avatarUrl        String? @map("avatar_url")
+  bio              String?
+  gender           String?
+  age              Int?
+  verificationNote String? @map("verification_note") // 审核备注
+
+  // Relation
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+// 陪诊师资料表
+model EscortProfile {
+  id              String  @id @default(uuid())
+  userId          String  @unique @map("user_id")
+  rating          Float   @default(0)
+  completedOrders Int     @default(0) @map("completed_orders")
+  isVerified      Boolean @default(false) @map("is_verified")
+  specialties     String[] // 专长，如 ["儿科", "骨科"]
+  certificateNo   String?  @map("certificate_no")  // 证书编号
+  bio             String?
+  hourlyRate      Float?   @map("hourly_rate")
+
+  // Relation
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("escort_profiles")
+}
+
+// 医院表
+model Hospital {
+  id          String   @id @default(uuid())
+  name        String
+  department  String   // 科室
+  level       String   // 等级，如 "三甲"
+  address     String
+  phone       String?
+  rating      Float?
+  imageUrl    String?  @map("image_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  orders Order[]
+
+  @@map("hospitals")
+}
+
+// 服务类型表
+model Service {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  basePrice   Float       @map("base_price")
+  type        ServiceType
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  orders Order[]
+
+  @@map("services")
+}
+
+// 订单表
+model Order {
+  id            String      @id @default(uuid())
+  patientId     String      @map("patient_id")
+  escortId      String?     @map("escort_id")
+  hospitalId    String      @map("hospital_id")
+  serviceId     String      @map("service_id")
+  serviceType   ServiceType @map("service_type")
+  status        OrderStatus @default(PENDING)
+  price         Float
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
+  appointmentDate DateTime?  @map("appointment_date")
+  notes         String?
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  patient     User     @relation("PatientOrders", fields: [patientId], references: [id])
+  escort      User?    @relation("EscortOrders", fields: [escortId], references: [id])
+  hospital    Hospital @relation(fields: [hospitalId], references: [id])
+  service     Service  @relation(fields: [serviceId], references: [id])
+  messages    Message[]
+  reviews     Review[]
+  payment     Payment?
+
+  @@map("orders")
+}
+
+// 消息表
+model Message {
+  id             String   @id @default(uuid())
+  orderId        String?  @map("order_id")
+  senderId       String   @map("sender_id")
+  receiverId     String   @map("receiver_id")
+  content        String
+  isRead         Boolean  @default(false) @map("is_read")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  order   Order?  @relation(fields: [orderId], references: [id])
+  sender  User    @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User   @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  @@map("messages")
+}
+
+// 评价表
+model Review {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+  authorId  String   @map("author_id")
+  targetId  String   @map("target_id")
+  rating    Int      // 1-5
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  order  Order @relation(fields: [orderId], references: [id])
+  author User  @relation("ReviewAuthor", fields: [authorId], references: [id])
+  target User  @relation("ReviewTarget", fields: [targetId], references: [id])
+
+  @@map("reviews")
+}
+
+// 刷新令牌表 (用于 JWT 刷新)
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+}
+
+// 支付记录表
+model Payment {
+  id            String        @id @default(uuid())
+  orderId       String        @unique @map("order_id")
+  userId        String        @map("user_id")
+  amount        Float         // 支付金额 (分)
+  currency      String        @default("cny") // cny 或 usd
+  method        PaymentMethod // 支付方式
+  status        PaymentStatus @default(PENDING)
+  stripePaymentIntentId String? @unique @map("stripe_payment_intent_id")
+  wechatOrderId  String?  @unique @map("wechat_order_id")
+  paidAt        DateTime? @map("paid_at")
+  refundedAt    DateTime? @map("refunded_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relation
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("payments")
+}
+
+// 通知表
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String   // ORDER_STATUS, MESSAGE, REVIEW, SYSTEM, PAYMENT
+  title     String
+  content   String
+  data      Json?    // 额外数据，如 { orderId: "xxx" }
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relation
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}

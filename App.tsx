@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
 import { PatientDashboard } from './components/PatientDashboard';
 import { EscortDashboard } from './components/EscortDashboard';
@@ -8,6 +8,8 @@ import { Explore } from './components/Explore';
 import { Notifications } from './components/Notifications';
 import { Messages } from './components/Messages';
 import { Profile } from './components/Profile';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { AdminDashboard } from './components/AdminDashboard';
 import { UserRole, PageType, Language } from './types';
 import { Search, MoreHorizontal, Mail, FileText, Home, Plus, X, Settings as SettingsIcon, Share, BrainCircuit } from 'lucide-react';
 import { apiService } from './services/apiService';
@@ -36,7 +38,7 @@ const App: React.FC = () => {
     console.log(`User interacted with: ${featureName}`);
   };
 
-  const t = {
+  const translations = useMemo(() => ({
     zh: {
       search: '搜索医院 / 科室',
       searchPlaceholder: '搜索',
@@ -85,7 +87,9 @@ const App: React.FC = () => {
       upgrade: 'Upgrade to MediMate+',
       featureList: ['Search', 'Orders', 'Messages', 'AI Assistant']
     }
-  }[lang];
+  }), []);
+
+  const t = translations[lang];
 
   const renderRightSidebar = () => {
     return (
@@ -173,6 +177,8 @@ const App: React.FC = () => {
         return <Messages lang={lang} />;
       case 'profile':
         return <Profile lang={lang} role={role} onBack={() => setCurrentPage('home')} />;
+      case 'admin':
+        return <AdminDashboard lang={lang} />;
       case 'saved':
         return <div className="p-10 text-center"><h2 className="text-xl font-bold">Saved functionality coming soon.</h2></div>;
     }
@@ -247,11 +253,12 @@ const App: React.FC = () => {
   };
 
   return (
+    <ErrorBoundary>
     <div className="min-h-screen bg-white text-black font-sans flex justify-center relative">
-       
+
        {currentPage === 'login' && (
-         <Login 
-           setRole={(r) => { setRole(r); setCurrentPage('home'); }} 
+         <Login
+           setRole={(r) => { setRole(r); setCurrentPage('home'); }}
            onClose={() => setCurrentPage('home')}
            lang={lang}
          />
@@ -392,6 +399,7 @@ const App: React.FC = () => {
        </div>
 
     </div>
+    </ErrorBoundary>
   );
 };
 
