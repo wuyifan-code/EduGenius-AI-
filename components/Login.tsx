@@ -241,28 +241,6 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
 
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">{t.roleSelection}</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    className={`py-3 px-4 rounded-xl font-bold text-sm transition-colors ${selectedRole === UserRole.PATIENT
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-teal-50 text-teal-600 hover:bg-teal-100'}`}
-                    onClick={() => setSelectedRole(UserRole.PATIENT)}
-                  >
-                    {t.patient}
-                  </button>
-                  <button
-                    className={`py-3 px-4 rounded-xl font-bold text-sm transition-colors ${selectedRole === UserRole.ESCORT
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
-                    onClick={() => setSelectedRole(UserRole.ESCORT)}
-                  >
-                    {t.escort}
-                  </button>
-                </div>
-              </div>
-
-              <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">{t.emailLabel}</label>
                 <div className="border-b-2 border-slate-100 focus-within:border-black transition-colors py-2">
                   <input
@@ -443,28 +421,6 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
                 </div>
               )}
               
-              <div className="mb-4">
-                <label className="block text-sm font-bold text-slate-700 mb-2">{t.roleSelection}</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    className={`py-3 px-4 rounded-xl font-bold text-sm transition-colors ${selectedRole === UserRole.PATIENT 
-                      ? 'bg-teal-600 text-white' 
-                      : 'bg-teal-50 text-teal-600 hover:bg-teal-100'}`}
-                    onClick={() => setSelectedRole(UserRole.PATIENT)}
-                  >
-                    {t.patient}
-                  </button>
-                  <button
-                    className={`py-3 px-4 rounded-xl font-bold text-sm transition-colors ${selectedRole === UserRole.ESCORT 
-                      ? 'bg-indigo-600 text-white' 
-                      : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
-                    onClick={() => setSelectedRole(UserRole.ESCORT)}
-                  >
-                    {t.escort}
-                  </button>
-                </div>
-              </div>
-
               <div className="mb-4">
                 <label className="block text-sm font-bold text-slate-700 mb-2">{t.nameLabel}</label>
                 <div className="border-b-2 border-slate-100 focus-within:border-black transition-colors py-2">

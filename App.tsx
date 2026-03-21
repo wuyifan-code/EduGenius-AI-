@@ -10,8 +10,10 @@ import { Profile } from './components/Profile';
 import { SearchResults } from './components/SearchResults';
 import { SearchBar } from './components/SearchBar';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { OrderConfirmation } from './components/OrderConfirmation';
+import { OrderList } from './components/OrderList';
 import { UserRole, PageType, Language, UserInfo, Hospital, EscortProfile } from './types';
-import { Search, MoreHorizontal, Mail, FileText, Home, Plus, X, Settings as SettingsIcon, Share, BrainCircuit, Loader2 } from 'lucide-react';
+import { Search, MoreHorizontal, Mail, FileText, Home, Plus, X, Settings as SettingsIcon, Share, BrainCircuit, Loader2, MessageCircle, Zap, Heart, BarChart2, Calendar, ClipboardList, Car, FileSearch } from 'lucide-react';
 import { apiService } from './services/apiService';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MessageProvider, useMessages } from './contexts/MessageContext';
@@ -48,6 +50,17 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
   const [searchQuery, setSearchQuery] = useState('');
   const [popularHospitals, setPopularHospitals] = useState<Hospital[]>([]);
   const [popularEscorts, setPopularEscorts] = useState<EscortProfile[]>([]);
+  const [selectedEscortId, setSelectedEscortId] = useState<string | null>(null);
+  
+  // Official post interaction states
+  const [officialPostLiked, setOfficialPostLiked] = useState(false);
+  const [officialPostStats, setOfficialPostStats] = useState({ comments: 124, likes: 13000, shares: 210000 });
+  const [showShareMenu, setShowShareMenu] = useState(false);
+
+  // Order creation state
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [selectedServiceType, setSelectedServiceType] = useState<'FULL_PROCESS' | 'APPOINTMENT' | 'REPORT_PICKUP' | 'VIP_TRANSPORT'>('FULL_PROCESS');
+  const [selectedEscortForOrder, setSelectedEscortForOrder] = useState<EscortProfile | null>(null);
 
   // Auto-login on app load
   useEffect(() => {
@@ -95,14 +108,64 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
     setRole(userData.role);
     setCurrentPage('home');
   };
+
+  // Handle starting a conversation with an escort
+  const handleStartConversation = async (escortId: string) => {
+    if (!apiService.isLoggedIn()) {
+      setCurrentPage('login');
+      return;
+    }
+    try {
+      await apiService.startConversation(escortId);
+      setSelectedEscortId(escortId);
+      setCurrentPage('messages');
+    } catch (error) {
+      console.error('Failed to start conversation:', error);
+      setCurrentPage('messages');
+    }
+  };
   
   // Close drawer on route change
   useEffect(() => {
     setMobileDrawerOpen(false);
+    if (currentPage !== 'messages') {
+      const timeout = setTimeout(() => setSelectedEscortId(null), 0);
+      return () => clearTimeout(timeout);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
   const handleInteract = (featureName: string) => {
-    console.log(`User interacted with: ${featureName}`);
+    if (featureName === 'New Order') {
+      if (role === UserRole.GUEST) {
+        setCurrentPage('login');
+        return;
+      }
+      // Show service type selection modal
+      setShowOrderModal(true);
+    } else {
+      console.log(`User interacted with: ${featureName}`);
+    }
+  };
+
+  const handleSelectServiceType = (type: 'FULL_PROCESS' | 'APPOINTMENT' | 'REPORT_PICKUP' | 'VIP_TRANSPORT') => {
+    setSelectedServiceType(type);
+    // After selecting service type, show escort selection or proceed to order form
+    setShowOrderModal(false);
+    // Navigate to explore page to select escort
+    setCurrentPage('explore');
+  };
+
+  const handleSelectEscortForOrder = (escort: EscortProfile) => {
+    setSelectedEscortForOrder(escort);
+    setCurrentPage('order-confirmation');
+  };
+
+  const handleOrderSuccess = (orderId: string) => {
+    setSelectedEscortForOrder(null);
+    setCurrentPage('orders');
+    // Show success message
+    alert(lang === 'zh' ? `订单创建成功！订单号: ${orderId}` : `Order created successfully! Order ID: ${orderId}`);
   };
 
   // Handle search
@@ -220,14 +283,17 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
                 ) : (
                   // Fallback static data
                   [
-                    { tag: lang === 'zh' ? '北京' : 'Beijing', title: lang === 'zh' ? '北京协和医院' : 'Peking Union Medical College', posts: `5,203 ${t.orders}` },
-                    { tag: lang === 'zh' ? '上海' : 'Shanghai', title: lang === 'zh' ? '复旦大学附属华山医院' : 'Huashan Hospital', posts: `2,100 ${t.orders}` },
-                    { tag: lang === 'zh' ? '广州' : 'Guangzhou', title: lang === 'zh' ? '中山大学附属第一医院' : 'First Affiliated Hospital', posts: `10.5K ${t.orders}` },
+                    { tag: lang === 'zh' ? '北京 · 三甲' : 'Beijing · Grade 3A', title: lang === 'zh' ? '北京协和医院' : 'Peking Union Medical College', posts: `5,203 ${t.orders}`, id: 'hosp-001' },
+                    { tag: lang === 'zh' ? '上海 · 三甲' : 'Shanghai · Grade 3A', title: lang === 'zh' ? '复旦大学附属华山医院' : 'Huashan Hospital', posts: `2,100 ${t.orders}`, id: 'hosp-002' },
+                    { tag: lang === 'zh' ? '广州 · 三甲' : 'Guangzhou · Grade 3A', title: lang === 'zh' ? '中山大学附属第一医院' : 'First Affiliated Hospital', posts: `10.5K ${t.orders}`, id: 'hosp-003' },
                   ].map((item, idx) => (
                     <div
                       key={idx}
                       className="px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors relative"
-                      onClick={() => handleInteract(`Hospital: ${item.title}`)}
+                      onClick={() => {
+                        setSearchQuery(item.title);
+                        setIsSearchMode(true);
+                      }}
                     >
                        <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
                           <span>{item.tag} · 三甲</span>
@@ -248,7 +314,7 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
                     <div
                       key={escort.id}
                       className="px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors flex items-center justify-between"
-                      onClick={() => handleSearch(escort.name, 'escort')}
+                      onClick={() => handleStartConversation(escort.id)}
                     >
                        <div className="flex items-center gap-3">
                           <img src={escort.imageUrl || `https://picsum.photos/100/100?random=${escort.id}`} alt={escort.name} className="h-10 w-10 rounded-full bg-slate-300" />
@@ -259,7 +325,7 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
                        </div>
                        <button
                          className="bg-black dark:bg-teal-600 text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-slate-800 dark:hover:bg-teal-500"
-                         onClick={(e) => { e.stopPropagation(); handleSearch(escort.name, 'escort'); }}
+                         onClick={(e) => { e.stopPropagation(); handleStartConversation(escort.id); }}
                        >
                           {t.book}
                        </button>
@@ -268,24 +334,24 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
                 ) : (
                   // Fallback static data
                   [
-                    { name: lang === 'zh' ? '王淑芬' : 'Wang', handle: '@wang_pro', avatar: 'https://picsum.photos/100/100?random=20' },
-                    { name: lang === 'zh' ? '张伟' : 'Zhang', handle: '@zhang_expert', avatar: 'https://picsum.photos/100/100?random=21' },
+                    { id: 'escort-wang', name: lang === 'zh' ? '王淑芬' : 'Wang Shu', handle: '@wang_pro', avatar: 'https://picsum.photos/100/100?random=20', rating: 4.9, orders: 523 },
+                    { id: 'escort-zhang', name: lang === 'zh' ? '张伟' : 'Zhang Wei', handle: '@zhang_expert', avatar: 'https://picsum.photos/100/100?random=21', rating: 4.8, orders: 210 },
                   ].map((item, idx) => (
                     <div
                       key={idx}
                       className="px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors flex items-center justify-between"
-                      onClick={() => handleInteract(`Profile: ${item.handle}`)}
+                      onClick={() => handleStartConversation(item.id)}
                     >
                        <div className="flex items-center gap-3">
                           <img src={item.avatar} alt={item.name} className="h-10 w-10 rounded-full bg-slate-300" />
                           <div className="leading-tight">
                              <div className="font-bold hover:underline text-slate-900 dark:text-white">{item.name}</div>
-                             <div className="text-slate-500 dark:text-slate-400 text-sm">{item.handle}</div>
+                             <div className="text-slate-500 dark:text-slate-400 text-sm">{item.rating} ⭐ · {item.orders} 订单</div>
                           </div>
                        </div>
                        <button
                          className="bg-black dark:bg-teal-600 text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-slate-800 dark:hover:bg-teal-500"
-                         onClick={(e) => { e.stopPropagation(); handleInteract(`Book ${item.handle}`); }}
+                         onClick={(e) => { e.stopPropagation(); handleStartConversation(item.id); }}
                        >
                           {t.book}
                        </button>
@@ -308,23 +374,53 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
       case 'settings':
         return <Settings currentLang={lang} setLang={setLang} onBack={() => setCurrentPage('home')} />;
       case 'explore':
-        return <Explore lang={lang} user={user} />;
+        return <Explore lang={lang} user={user} onSelectHospital={(hospital) => { setSearchQuery(hospital.name); setIsSearchMode(true); }} />;
       case 'notifications':
         return <Notifications lang={lang} user={user} />;
       case 'messages':
-        return <Messages lang={lang} user={user} />;
+        return <Messages lang={lang} user={user} initialPartnerId={selectedEscortId} />;
       case 'profile':
         return <Profile lang={lang} role={role} user={user} onBack={() => setCurrentPage('home')} onLogout={handleLogout} />;
       case 'admin':
         return <Suspense fallback={<PageLoader />}><AdminDashboard lang={lang} /></Suspense>;
       case 'saved':
         return <div className="p-10 text-center"><h2 className="text-xl font-bold">Saved functionality coming soon.</h2></div>;
+      case 'orders':
+        return <OrderList lang={lang} user={user} />;
+      case 'order-confirmation':
+        return selectedEscortForOrder ? (
+          <OrderConfirmation
+            escort={{
+              id: selectedEscortForOrder.id,
+              name: selectedEscortForOrder.name,
+              avatar: selectedEscortForOrder.imageUrl,
+              rating: selectedEscortForOrder.rating,
+              hourly_rate: selectedEscortForOrder.hourlyRate || 100,
+              is_verified: selectedEscortForOrder.isCertified
+            }}
+            serviceType={selectedServiceType}
+            servicePrice={selectedEscortForOrder.hourlyRate || 100}
+            onSuccess={handleOrderSuccess}
+            onCancel={() => setCurrentPage('explore')}
+            lang={lang}
+          />
+        ) : (
+          <div className="p-10 text-center">
+            <h2 className="text-xl font-bold mb-4">{lang === 'zh' ? '请先选择陪诊师' : 'Please select an escort first'}</h2>
+            <button
+              onClick={() => setCurrentPage('explore')}
+              className="px-6 py-3 bg-teal-600 text-white rounded-full font-bold hover:bg-teal-700 transition-colors"
+            >
+              {lang === 'zh' ? '去选择陪诊师' : 'Choose Escort'}
+            </button>
+          </div>
+        );
     }
 
     // Home feed based on role
     switch (role) {
       case UserRole.PATIENT:
-        return <Suspense fallback={<PageLoader />}><PatientDashboard lang={lang} user={user} /></Suspense>;
+        return <Suspense fallback={<PageLoader />}><PatientDashboard lang={lang} user={user} onSelectService={(service) => { setSearchQuery(service); setIsSearchMode(true); }} /></Suspense>;
       case UserRole.ESCORT:
         return <Suspense fallback={<PageLoader />}><EscortDashboard lang={lang} user={user} /></Suspense>;
       default:
@@ -352,12 +448,93 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
                   <div className="mt-3 rounded-2xl overflow-hidden border border-slate-100 bg-slate-50">
                      <img src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=800&q=80" alt="Medical Escort" className="w-full h-64 object-cover" />
                   </div>
-                   <div className="mt-3 flex justify-between text-slate-500 max-w-md pr-4">
-                     <button className="hover:text-teal-500 flex items-center gap-1 text-xs"><span className="p-2 hover:bg-blue-50 rounded-full">💬</span> 124</button>
-                     <button className="hover:text-green-500 flex items-center gap-1 text-xs"><span className="p-2 hover:bg-green-50 rounded-full">⚡</span> 502</button>
-                     <button className="hover:text-red-500 flex items-center gap-1 text-xs"><span className="p-2 hover:bg-red-50 rounded-full">❤️</span> 1.3{lang === 'zh' ? '万' : '0k'}</button>
-                     <button className="hover:text-teal-500 flex items-center gap-1 text-xs"><span className="p-2 hover:bg-teal-50 rounded-full">📊</span> 21{lang === 'zh' ? '万' : '0k'}</button>
-                     <button className="hover:text-blue-500"><Share className="h-4 w-4" /></button>
+                   <div className="mt-3 flex items-center gap-6 text-slate-500">
+                     <button 
+                       className="flex items-center gap-2 hover:text-blue-500 transition-colors group"
+                       onClick={() => {
+                         setOfficialPostStats(prev => ({ ...prev, comments: prev.comments + 1 }));
+                         setCurrentPage('messages');
+                       }}
+                     >
+                       <MessageCircle className="h-5 w-5" />
+                       <span className="text-sm">{officialPostStats.comments}</span>
+                     </button>
+                     <button 
+                       className="flex items-center gap-2 hover:text-green-500 transition-colors group"
+                       onClick={() => {
+                         if (role === UserRole.GUEST) {
+                           setCurrentPage('login');
+                         } else {
+                           setSearchQuery('快速预约');
+                           setIsSearchMode(true);
+                         }
+                       }}
+                     >
+                       <Zap className="h-5 w-5" />
+                       <span className="text-sm">502</span>
+                     </button>
+                     <button 
+                       className={`flex items-center gap-2 transition-colors group ${officialPostLiked ? 'text-red-500' : 'hover:text-red-500'}`}
+                       onClick={() => {
+                         setOfficialPostLiked(!officialPostLiked);
+                         setOfficialPostStats(prev => ({
+                           ...prev,
+                           likes: officialPostLiked ? prev.likes - 1 : prev.likes + 1
+                         }));
+                       }}
+                     >
+                       <Heart className={`h-5 w-5 ${officialPostLiked ? 'fill-current' : ''}`} />
+                       <span className="text-sm">{(officialPostStats.likes / 10000).toFixed(1)}{lang === 'zh' ? '万' : '0k'}</span>
+                     </button>
+                     <button 
+                       className="flex items-center gap-2 hover:text-teal-500 transition-colors group"
+                       onClick={() => alert(lang === 'zh' ? '浏览量统计' : 'View count stats')}
+                     >
+                       <BarChart2 className="h-5 w-5" />
+                       <span className="text-sm">{(officialPostStats.shares / 10000).toFixed(0)}{lang === 'zh' ? '万' : '0k'}</span>
+                     </button>
+                     <div className="relative ml-auto">
+                       <button 
+                         className="hover:text-blue-500 transition-colors"
+                         onClick={() => setShowShareMenu(!showShareMenu)}
+                       >
+                         <Share className="h-5 w-5" />
+                       </button>
+                       {showShareMenu && (
+                         <div className="absolute bottom-full right-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-100 py-2 z-10 min-w-[140px]">
+                           <button 
+                             className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                             onClick={() => {
+                               if (navigator.share) {
+                                 navigator.share({
+                                   title: 'MediMate 官方服务',
+                                   text: '专业陪诊服务，让就医更轻松',
+                                   url: window.location.href
+                                 });
+                               } else {
+                                 navigator.clipboard.writeText(window.location.href);
+                                 alert(lang === 'zh' ? '链接已复制' : 'Link copied');
+                               }
+                               setShowShareMenu(false);
+                             }}
+                           >
+                             <Share className="h-4 w-4" />
+                             {lang === 'zh' ? '分享' : 'Share'}
+                           </button>
+                           <button 
+                             className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                             onClick={() => {
+                               navigator.clipboard.writeText(window.location.href);
+                               alert(lang === 'zh' ? '链接已复制到剪贴板' : 'Link copied to clipboard');
+                               setShowShareMenu(false);
+                             }}
+                           >
+                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                             {lang === 'zh' ? '复制链接' : 'Copy Link'}
+                           </button>
+                         </div>
+                       )}
+                     </div>
                    </div>
                 </div>
               </div>
@@ -530,6 +707,72 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
           {renderRightSidebar()}
        </div>
        
+       {/* Service Type Selection Modal */}
+       {showOrderModal && (
+         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+           <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+             <div className="flex items-center justify-between mb-6">
+               <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                 {lang === 'zh' ? '选择服务类型' : 'Select Service Type'}
+               </h2>
+               <button
+                 onClick={() => setShowOrderModal(false)}
+                 className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+               >
+                 <X className="h-5 w-5 text-slate-500" />
+               </button>
+             </div>
+
+             <div className="space-y-3">
+               {[
+                 {
+                   type: 'FULL_PROCESS' as const,
+                   icon: ClipboardList,
+                   title: lang === 'zh' ? '全程陪诊' : 'Full Escort',
+                   desc: lang === 'zh' ? '从挂号到取药的全程陪伴' : 'Full accompaniment from registration to medication'
+                 },
+                 {
+                   type: 'APPOINTMENT' as const,
+                   icon: Calendar,
+                   title: lang === 'zh' ? '代约挂号' : 'Appointment Booking',
+                   desc: lang === 'zh' ? '帮助预约专家号源' : 'Help booking specialist appointments'
+                 },
+                 {
+                   type: 'REPORT_PICKUP' as const,
+                   icon: FileSearch,
+                   title: lang === 'zh' ? '代取报告' : 'Report Pickup',
+                   desc: lang === 'zh' ? '代取检查报告并解读' : 'Pick up and interpret medical reports'
+                 },
+                 {
+                   type: 'VIP_TRANSPORT' as const,
+                   icon: Car,
+                   title: lang === 'zh' ? '专车接送' : 'VIP Transport',
+                   desc: lang === 'zh' ? '舒适专车接送服务' : 'Comfortable private car transport service'
+                 }
+               ].map((service) => (
+                 <button
+                   key={service.type}
+                   onClick={() => handleSelectServiceType(service.type)}
+                   className="w-full flex items-center gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-teal-500 dark:hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all text-left"
+                 >
+                   <div className="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
+                     <service.icon className="h-6 w-6 text-teal-600 dark:text-teal-400" />
+                   </div>
+                   <div className="flex-1">
+                     <h3 className="font-bold text-slate-900 dark:text-white">{service.title}</h3>
+                     <p className="text-sm text-slate-500 dark:text-slate-400">{service.desc}</p>
+                   </div>
+                 </button>
+               ))}
+             </div>
+
+             <p className="mt-4 text-xs text-slate-400 text-center">
+               {lang === 'zh' ? '选择后将进入陪诊师选择页面' : 'You will select an escort after choosing the service'}
+             </p>
+           </div>
+         </div>
+       )}
+
        {/* Mobile Bottom Nav */}
        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex justify-between px-6 py-3 lg:hidden z-50 pb-safe">
          <div className="cursor-pointer" onClick={() => setCurrentPage('home')}>

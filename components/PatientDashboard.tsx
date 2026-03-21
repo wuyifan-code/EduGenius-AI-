@@ -2,11 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getHealthTriage } from '../services/geminiService';
 import { apiService } from '../services/apiService';
 import { EscortProfile, Language, UserInfo } from '../types';
-import { MapPin, MessageCircle, Repeat2, Heart, BarChart2, Share, Image as ImageIcon, Smile, CalendarClock, BriefcaseMedical, MoreHorizontal, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { MapPin, MessageCircle, Repeat2, Heart, BarChart2, Share, Image as ImageIcon, Smile, CalendarClock, BriefcaseMedical, MoreHorizontal, AlertCircle, RefreshCw, Loader2, X, Calendar, Star, FileText, Briefcase } from 'lucide-react';
+import { DatePickerModal } from './DatePickerModal';
+import { AvailableEscorts } from './AvailableEscorts';
 
 interface PatientDashboardProps {
   lang: Language;
   user?: UserInfo | null;
+  onSelectService?: (service: string) => void;
 }
 
 // Pull to refresh hook
@@ -45,13 +48,56 @@ const usePullToRefresh = (onRefresh: () => Promise<void>) => {
   return { isRefreshing, pullDistance, handleTouchStart, handleTouchMove, handleTouchEnd };
 };
 
-export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user }) => {
+export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user, onSelectService }) => {
   const [symptoms, setSymptoms] = useState('');
   const [aiAdvice, setAiAdvice] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [escorts, setEscorts] = useState<EscortProfile[]>([]);
   const [escortsLoading, setEscortsLoading] = useState(true);
   const [escortsError, setEscortsError] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [savedEscorts, setSavedEscorts] = useState<Set<string>>(new Set());
+  const [consultCount, setConsultCount] = useState<Record<string, number>>({});
+  const [showShareMenu, setShowShareMenu] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleToggleSave = (escortId: string) => {
+    setSavedEscorts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(escortId)) {
+        newSet.delete(escortId);
+      } else {
+        newSet.add(escortId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleConsult = (escortId: string) => {
+    setConsultCount(prev => ({
+      ...prev,
+      [escortId]: (prev[escortId] || 0) + 1
+    }));
+  };
+
+  const handleShare = (escortId: string, escortName: string) => {
+    if (navigator.share) {
+      navigator.share({
+        title: 'MediMate 陪诊服务',
+        text: `发现优秀陪诊师：${escortName}`,
+        url: window.location.href
+      });
+    } else {
+      navigator.clipboard.writeText(`发现优秀陪诊师：${escortName} - ${window.location.href}`);
+      alert(lang === 'zh' ? '链接已复制到剪贴板' : 'Link copied to clipboard');
+    }
+    setShowShareMenu(null);
+  };
 
   const refreshData = async () => {
     await loadEscorts();
@@ -84,7 +130,12 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user }
       failedToLoad: '加载失败',
       noEscortsFound: '附近暂无陪诊师',
       retry: '重试',
-      networkError: '网络错误，请检查网络连接'
+      networkError: '网络错误，请检查网络连接',
+      saved: '已收藏',
+      save: '收藏',
+      shared: '已分享',
+      share: '分享',
+      copied: '已复制'
     },
     en: {
       placeholder: 'What are your symptoms? (AI Triage)',
@@ -110,7 +161,12 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user }
       failedToLoad: 'Failed to load',
       noEscortsFound: 'No escorts found nearby',
       retry: 'Retry',
-      networkError: 'Network error, please check your connection'
+      networkError: 'Network error, please check your connection',
+      saved: 'Saved',
+      save: 'Save',
+      shared: 'Shared',
+      share: 'Share',
+      copied: 'Copied'
     }
   }[lang];
 
@@ -228,12 +284,51 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user }
               </div>
             )}
 
+            {selectedImage && (
+              <div className="mb-3 relative inline-block">
+                <img src={selectedImage} alt="Preview" className="h-24 rounded-lg object-cover" />
+                <button onClick={() => setSelectedImage(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><X className="h-3 w-3" /></button>
+              </div>
+            )}
+
             <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
               <div className="flex gap-1 text-teal-500">
-                <div onClick={() => onInteract('Add Image')} className="p-2 hover:bg-teal-50 rounded-full cursor-pointer transition-colors"><ImageIcon className="h-5 w-5" /></div>
-                <div onClick={() => onInteract('Schedule')} className="p-2 hover:bg-teal-50 rounded-full cursor-pointer transition-colors"><CalendarClock className="h-5 w-5" /></div>
-                <div onClick={() => onInteract('Location')} className="p-2 hover:bg-teal-50 rounded-full cursor-pointer transition-colors opacity-50"><MapPin className="h-5 w-5" /></div>
+                <div onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-teal-50 rounded-full cursor-pointer transition-colors"><ImageIcon className="h-5 w-5" /></div>
+                <div onClick={() => setShowDatePicker(true)} className={`p-2 rounded-full cursor-pointer transition-colors ${selectedDate ? 'bg-teal-100 text-teal-600' : 'hover:bg-teal-50 text-teal-500'}`}><Calendar className="h-5 w-5" /></div>
+                <div 
+                  onClick={() => {
+                    if (!navigator.geolocation) {
+                      alert(lang === 'zh' ? '您的浏览器不支持定位功能' : 'Your browser does not support geolocation');
+                      return;
+                    }
+                    setIsGettingLocation(true);
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => {
+                        const lat = pos.coords.latitude.toFixed(6);
+                        const lng = pos.coords.longitude.toFixed(6);
+                        const locationStr = `${lat},${lng}`;
+                        setSelectedLocation(locationStr);
+                        const newSym = symptoms + (symptoms ? ' ' : '') + `[位置: ${lat}, ${lng}]`;
+                        setSymptoms(newSym);
+                        setIsGettingLocation(false);
+                      },
+                      (err) => {
+                        setIsGettingLocation(false);
+                        let msg = lang === 'zh' ? '无法获取位置' : 'Cannot get location';
+                        if (err.code === 1) msg = lang === 'zh' ? '请允许位置权限' : 'Please allow location permission';
+                        if (err.code === 2) msg = lang === 'zh' ? '位置不可用' : 'Location unavailable';
+                        if (err.code === 3) msg = lang === 'zh' ? '定位超时' : 'Location timeout';
+                        alert(msg);
+                      },
+                      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+                    );
+                  }} 
+                  className={`p-2 rounded-full cursor-pointer transition-colors ${selectedLocation ? 'bg-teal-100 text-teal-600' : 'hover:bg-teal-50 text-teal-500'}`}
+                >
+                  {isGettingLocation ? <Loader2 className="h-5 w-5 animate-spin" /> : <MapPin className="h-5 w-5" />}
+                </div>
               </div>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const reader = new FileReader(); reader.onload = (ev) => setSelectedImage(ev.target?.result as string); reader.readAsDataURL(f); } }} />
               <button
               onClick={handleAiTriage}
               disabled={aiLoading || !symptoms}
@@ -269,8 +364,8 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user }
                   {t.services.map((s, idx) => (
                     <div 
                         key={idx} 
-                        className={`rounded-xl p-3 ${serviceColors[idx]} border border-transparent hover:border-black/10 transition-all`}
-                        onClick={(e) => { e.stopPropagation(); onInteract(`Service: ${s.label}`); }}
+                        className={`rounded-xl p-3 ${serviceColors[idx]} border border-transparent hover:border-black/10 transition-all cursor-pointer`}
+                        onClick={(e) => { e.stopPropagation(); onSelectService?.(s.label); }}
                     >
                        <div className="font-bold">{s.label}</div>
                        <div className="text-xs opacity-70">{s.sub}</div>
@@ -279,6 +374,24 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user }
                 </div>
              </div>
          </div>
+      </div>
+
+      {/* Available Escorts Services */}
+      <div className="border-b border-slate-100">
+        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50">
+          <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-teal-600" />
+            {lang === 'zh' ? '可预约陪诊师' : 'Available Escorts'}
+          </h3>
+        </div>
+        <AvailableEscorts
+          lang={lang}
+          onBook={(service, slot) => {
+            // Navigate to order confirmation with pre-filled data
+            console.log('Booking service:', service, 'slot:', slot);
+            // This will be handled by parent component
+          }}
+        />
       </div>
 
       {/* Escort List */}
@@ -346,50 +459,78 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user }
                   <div className="mt-1 text-slate-900">
                      <p className="mb-2">{t.proService} <span className="text-teal-500">#{escort.specialties[0]}</span> {t.process}</p>
                      <div className="flex flex-wrap gap-2 text-sm text-slate-600">
-                       <span className="bg-slate-100 px-2 py-0.5 rounded">⭐ {escort.rating}</span>
-                       <span className="bg-slate-100 px-2 py-0.5 rounded">📜 100%{t.certified}</span>
-                       <span className="bg-slate-100 px-2 py-0.5 rounded">💼 {t.orders}{escort.completedOrders}+</span>
+                       <span className="bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1"><Star className="h-3 w-3" /> {escort.rating}</span>
+                       <span className="bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1"><FileText className="h-3 w-3" /> 100%{t.certified}</span>
+                       <span className="bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1"><Briefcase className="h-3 w-3" /> {t.orders}{escort.completedOrders}+</span>
                      </div>
                   </div>
 
-                  <div className="mt-3 flex justify-between text-slate-500 max-w-md pr-4">
-                     <div 
-                       className="flex items-center gap-1 group cursor-pointer"
-                       onClick={(e) => { e.stopPropagation(); onInteract('Consult'); }}
+                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
+                     <button 
+                       className="flex items-center gap-2 text-slate-500 hover:text-blue-500 transition-colors group"
+                       onClick={(e) => { 
+                         e.stopPropagation(); 
+                         handleConsult(escort.id);
+                         onInteract('Consult'); 
+                       }}
                      >
-                        <div className="p-2 rounded-full group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
-                          <MessageCircle className="h-4 w-4" />
-                        </div>
-                        <span className="text-xs group-hover:text-blue-500">{t.consult}</span>
-                     </div>
+                        <MessageCircle className="h-5 w-5" />
+                        <span className="text-sm">{(consultCount[escort.id] || 0) > 0 ? (consultCount[escort.id]) : ''}</span>
+                     </button>
                       
-                     <div 
-                       className="flex items-center gap-1 group cursor-pointer"
+                     <button 
+                       className="flex items-center gap-2 text-slate-500 hover:text-green-500 transition-colors group"
                        onClick={(e) => { e.stopPropagation(); onInteract('Book Now'); }}
                      >
-                        <div className="p-2 rounded-full group-hover:bg-green-50 group-hover:text-green-500 transition-colors">
-                          <BriefcaseMedical className="h-4 w-4" />
-                        </div>
-                        <span className="text-xs group-hover:text-green-500">{t.book}</span>
-                     </div>
+                        <BriefcaseMedical className="h-5 w-5" />
+                        <span className="text-sm">{t.book}</span>
+                     </button>
 
-                     <div 
-                       className="flex items-center gap-1 group cursor-pointer"
-                       onClick={(e) => { e.stopPropagation(); onInteract('Save'); }}
+                     <button 
+                       className={`flex items-center gap-2 transition-colors group ${savedEscorts.has(escort.id) ? 'text-red-500' : 'text-slate-500 hover:text-red-500'}`}
+                       onClick={(e) => { 
+                         e.stopPropagation(); 
+                         handleToggleSave(escort.id);
+                         onInteract('Save'); 
+                       }}
                      >
-                        <div className="p-2 rounded-full group-hover:bg-red-50 group-hover:text-red-500 transition-colors">
-                          <Heart className="h-4 w-4" />
-                        </div>
-                        <span className="text-xs group-hover:text-red-500">{escort.rating}</span>
-                     </div>
+                        <Heart className={`h-5 w-5 ${savedEscorts.has(escort.id) ? 'fill-current' : ''}`} />
+                        <span className="text-sm">{savedEscorts.has(escort.id) ? t.saved : t.save}</span>
+                     </button>
 
-                     <div 
-                       className="flex items-center gap-1 group cursor-pointer"
-                       onClick={(e) => { e.stopPropagation(); onInteract('Share'); }}
-                     >
-                        <div className="p-2 rounded-full group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
-                          <Share className="h-4 w-4" />
-                        </div>
+                     <div className="relative ml-auto">
+                       <button 
+                         className="flex items-center gap-2 text-slate-500 hover:text-teal-500 transition-colors group"
+                         onClick={(e) => { 
+                           e.stopPropagation(); 
+                           setShowShareMenu(showShareMenu === escort.id ? null : escort.id);
+                         }}
+                       >
+                          <Share className="h-5 w-5" />
+                       </button>
+                       {showShareMenu === escort.id && (
+                         <div className="absolute bottom-full right-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-10 min-w-[120px]">
+                           <button 
+                             className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                             onClick={(e) => { e.stopPropagation(); handleShare(escort.id, escort.name); }}
+                           >
+                              <Share className="h-4 w-4" />
+                              {t.share}
+                           </button>
+                           <button 
+                             className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                             onClick={(e) => { 
+                               e.stopPropagation(); 
+                               navigator.clipboard.writeText(`${window.location.href}?escort=${escort.id}`);
+                               alert(lang === 'zh' ? '链接已复制' : 'Link copied');
+                               setShowShareMenu(null);
+                             }}
+                           >
+                              <BarChart2 className="h-4 w-4" />
+                              {t.copied}
+                           </button>
+                         </div>
+                       )}
                      </div>
                   </div>
                 </div>
@@ -398,6 +539,19 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user }
           ))
         )}
       </div>
+
+      <DatePickerModal
+        isOpen={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        onSelect={(date, time) => {
+          setSelectedDate(date);
+          setSelectedTime(time || '');
+          const dateStr = `${date}${time ? ` ${time}` : ''}`;
+          setSymptoms(symptoms + ` [预约: ${dateStr}]`);
+        }}
+        selectedDate={selectedDate}
+        selectedTime={selectedTime}
+      />
     </div>
   );
 };

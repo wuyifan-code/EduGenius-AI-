@@ -1,0 +1,217 @@
+/* MediMate 专业深色模式配色方案 */
+
+/* 基础变量定义 */
+:root {
+  /* 浅色模式变量 */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-elevated: #ffffff;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --border-primary: #e2e8f0;
+  --border-secondary: #f1f5f9;
+  
+  --accent-primary: #14b8a6;
+  --accent-secondary: #0d9488;
+  --accent-hover: #0f766e;
+  
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --info: #3b82f6;
+  
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+/* 深色模式变量 - 专业医疗级配色 */
+.dark {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-elevated: #1e293b;
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --border-primary: #334155;
+  --border-secondary: #1e293b;
+  
+  --accent-primary: #2dd4bf;
+  --accent-secondary: #14b8a6;
+  --accent-hover: #5eead4;
+  
+  --success: #34d399;
+  --warning: #fbbf24;
+  --error: #f87171;
+  --info: #60a5fa;
+  
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+}
+
+/* 全局样式 */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* 隐藏滚动条类 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 深色模式特定优化 */
+.dark {
+  color-scheme: dark;
+}
+
+/* 输入框在深色模式下的样式优化 */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* 按钮在深色模式下的发光效果 */
+.dark .btn-glow {
+  box-shadow: 0 0 20px rgba(45, 212, 191, 0.3);
+}
+
+.dark .btn-glow:hover {
+  box-shadow: 0 0 30px rgba(45, 212, 191, 0.5);
+}
+
+/* 卡片在深色模式下的边框和阴影 */
+.dark .card-elevated {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 
+              0 2px 4px -2px rgba(0, 0, 0, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* 医疗主题的特殊颜色 */
+.dark .medical-accent {
+  color: #2dd4bf;
+}
+
+.dark .medical-bg {
+  background: linear-gradient(135deg, #134e4a 0%, #0f766e 100%);
+}
+
+/* 状态颜色在深色模式下的调整 */
+.dark .status-success {
+  color: #34d399;
+  background-color: rgba(52, 211, 153, 0.1);
+}
+
+.dark .status-warning {
+  color: #fbbf24;
+  background-color: rgba(251, 191, 36, 0.1);
+}
+
+.dark .status-error {
+  color: #f87171;
+  background-color: rgba(248, 113, 113, 0.1);
+}
+
+.dark .status-info {
+  color: #60a5fa;
+  background-color: rgba(96, 165, 250, 0.1);
+}
+
+/* 分隔线在深色模式下 */
+.dark .divider {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 悬浮效果在深色模式下 */
+.dark .hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+/* 焦点样式 */
+*:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.dark *:focus-visible {
+  outline-color: #2dd4bf;
+}
+
+/* 加载动画颜色 */
+.dark .loading-spinner {
+  border-color: rgba(45, 212, 191, 0.3);
+  border-top-color: #2dd4bf;
+}
+
+/* 通知徽章 */
+.dark .badge {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+/* 渐变文字效果 */
+.dark .gradient-text {
+  background: linear-gradient(135deg, #2dd4bf 0%, #5eead4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 玻璃态效果在深色模式下 */
+.dark .glass {
+  background: rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 选中状态 */
+.dark ::selection {
+  background-color: rgba(45, 212, 191, 0.3);
+  color: #f8fafc;
+}

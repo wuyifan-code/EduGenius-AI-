@@ -6,6 +6,7 @@ import { wsService } from '../services/websocketService';
 
 interface MessagesProps {
   lang: Language;
+  initialPartnerId?: string | null;
 }
 
 type MessageType = 'TEXT' | 'IMAGE' | 'ORDER' | 'SYSTEM';
@@ -53,7 +54,7 @@ interface Conversation {
   updatedAt: string;
 }
 
-export const Messages: React.FC<MessagesProps> = ({ lang }) => {
+export const Messages: React.FC<MessagesProps> = ({ lang, initialPartnerId }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -123,6 +124,21 @@ export const Messages: React.FC<MessagesProps> = ({ lang }) => {
       setCurrentUserId(user.id);
     }
   }, []);
+
+  // Handle initial partner - select conversation when component mounts
+  useEffect(() => {
+    const selectPartner = () => {
+      if (initialPartnerId && conversations.length > 0) {
+        const conv = conversations.find(c => c.partnerId === initialPartnerId);
+        if (conv) {
+          setSelectedConversation(conv);
+        }
+      }
+    };
+    // Use setTimeout to avoid synchronous setState within effect
+    const timeout = setTimeout(selectPartner, 0);
+    return () => clearTimeout(timeout);
+  }, [initialPartnerId, conversations]);
 
   // Connect WebSocket
   useEffect(() => {

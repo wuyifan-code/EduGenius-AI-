@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { ShieldCheck, MapPin, MessageCircle, Repeat2, Heart, Share, BarChart2, Loader2, Check, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { ShieldCheck, MapPin, MessageCircle, Repeat2, Heart, Share, BarChart2, Loader2, Check, X, AlertCircle, RefreshCw, Briefcase, List } from 'lucide-react';
 import { Language, UserInfo } from '../types';
 import { apiService } from '../services/apiService';
+import { EscortServiceList } from './EscortServiceList';
+import { ServicePublishModal } from './ServicePublishModal';
 
 interface EscortDashboardProps {
   lang: Language;
@@ -95,6 +97,9 @@ export const EscortDashboard: React.FC<EscortDashboardProps> = ({ lang, user }) 
   const [completingOrderId, setCompletingOrderId] = useState<string | null>(null);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [activeTab, setActiveTab] = useState<'orders' | 'services'>('orders');
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [editingService, setEditingService] = useState<any>(null);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -328,6 +333,19 @@ export const EscortDashboard: React.FC<EscortDashboardProps> = ({ lang, user }) 
     );
   }
 
+  const handleEditService = (service: any) => {
+    setEditingService(service);
+    setShowPublishModal(true);
+  };
+
+  const handlePublishSuccess = () => {
+    setShowPublishModal(false);
+    setEditingService(null);
+    setShowSuccessToast(true);
+    setSuccessMessage(lang === 'zh' ? '服务发布成功！' : 'Service published successfully!');
+    setTimeout(() => setShowSuccessToast(false), 3000);
+  };
+
   return (
     <div className="pb-24">
       {/* 错误提示 */}
@@ -347,7 +365,58 @@ export const EscortDashboard: React.FC<EscortDashboardProps> = ({ lang, user }) 
         </div>
       )}
 
-      {/* Stats as Pinned Tweet */}
+      {/* Tab Navigation */}
+      <div className="flex border-b border-slate-200 dark:border-slate-700">
+        <button
+          onClick={() => setActiveTab('orders')}
+          className={`flex-1 py-3 px-4 text-center font-medium transition-colors ${
+            activeTab === 'orders'
+              ? 'text-teal-600 border-b-2 border-teal-600'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <span className="flex items-center justify-center gap-2">
+            <List className="h-4 w-4" />
+            {lang === 'zh' ? '我的订单' : 'My Orders'}
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('services')}
+          className={`flex-1 py-3 px-4 text-center font-medium transition-colors ${
+            activeTab === 'services'
+              ? 'text-teal-600 border-b-2 border-teal-600'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <span className="flex items-center justify-center gap-2">
+            <Briefcase className="h-4 w-4" />
+            {lang === 'zh' ? '我的服务' : 'My Services'}
+          </span>
+        </button>
+      </div>
+
+      {activeTab === 'services' && (
+        <div className="p-4">
+          <button
+            onClick={() => {
+              setEditingService(null);
+              setShowPublishModal(true);
+            }}
+            className="w-full mb-4 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <span className="text-xl">+</span>
+            {lang === 'zh' ? '发布新服务' : 'Publish New Service'}
+          </button>
+          <EscortServiceList
+            lang={lang}
+            onEdit={handleEditService}
+          />
+        </div>
+      )}
+
+      {activeTab === 'orders' && (
+        <>
+          {/* Stats as Pinned Tweet */}
       <div className="border-b border-slate-100 p-4 hover:bg-slate-50 cursor-pointer transition-colors">
         <div className="flex gap-1 mb-1 text-xs font-bold text-slate-500 items-center ml-12">
           <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current mr-1"><g><path d="M7 4.5C7 3.12 8.12 2 9.5 2h5C15.88 2 17 3.12 17 4.5v15c0 1.38-1.12 2.5-2.5 2.5h-5C8.12 22 7 20.88 7 19.5v-15zM9.5 4c-.28 0-.5.22-.5.5v15c0 .28.22.5.5.5h5c.28 0 .5-.22.5-.5v-15c0-.28-.22-.5-.5-.5h-5z"></path></g></svg>
@@ -512,6 +581,22 @@ export const EscortDashboard: React.FC<EscortDashboardProps> = ({ lang, user }) 
           <Check className="h-5 w-5" />
           <span className="font-bold">{successMessage}</span>
         </div>
+      )}
+
+      {/* Close orders tab wrapper */}
+      </>
+      )}
+
+      {/* Service Publish Modal */}
+      {showPublishModal && (
+        <ServicePublishModal
+          lang={lang}
+          onClose={() => {
+            setShowPublishModal(false);
+            setEditingService(null);
+          }}
+          onSuccess={handlePublishSuccess}
+        />
       )}
     </div>
   );

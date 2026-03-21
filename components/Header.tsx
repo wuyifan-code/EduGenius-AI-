@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { UserRole, PageType, Language, UserInfo } from '../types';
 import { apiService } from '../services/apiService';
 import { useMessages } from '../contexts/MessageContext';
+import { ServicePublishModal } from './ServicePublishModal';
 import {
   Home,
   Search,
@@ -14,7 +15,11 @@ import {
   HelpCircle,
   LogOut,
   FileText,
-  Shield
+  Shield,
+  Briefcase,
+  PlusCircle,
+  List,
+  ChevronDown
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -30,8 +35,11 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setPage, lang, onInteract, user: userProp, onLogout }) => {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showServiceMenu, setShowServiceMenu] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const [notificationUnread, setNotificationUnread] = useState(0);
   const { unreadCount: messageUnread, refreshUnreadCount } = useMessages();
+  const serviceMenuRef = useRef<HTMLDivElement>(null);
 
   const user = useMemo(() => {
     if (userProp) {
@@ -62,7 +70,10 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
       guest: '游客',
       escort: '陪诊师',
       patient: '患者',
-      admin: '管理后台'
+      admin: '管理后台',
+      publishService: '发布服务',
+      myServices: '我的服务',
+      serviceMenu: '服务菜单'
     },
     en: {
       home: 'Lobby',
@@ -81,7 +92,10 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
       guest: 'Guest',
       escort: 'Escort',
       patient: 'Patient',
-      admin: 'Admin Panel'
+      admin: 'Admin Panel',
+      publishService: 'Publish Service',
+      myServices: 'My Services',
+      serviceMenu: 'Service Menu'
     }
   }), []);
 
@@ -102,10 +116,45 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
   }, [role]);
 
   useEffect(() => {
-    fetchNotificationCount();
+    // Use setTimeout to avoid synchronous setState in effect
+    const timer = setTimeout(() => {
+      fetchNotificationCount();
+    }, 0);
     const interval = setInterval(fetchNotificationCount, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, [fetchNotificationCount]);
+
+  // Close service menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (serviceMenuRef.current && !serviceMenuRef.current.contains(event.target as Node)) {
+        setShowServiceMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handlePublishSuccess = () => {
+    setShowPublishModal(false);
+    // Refresh service list - navigate to escort dashboard services tab
+    setPage('escort-dashboard');
+    onInteract('Service published successfully');
+  };
+
+  const handlePublishClick = () => {
+    setShowServiceMenu(false);
+    setShowPublishModal(true);
+  };
+
+  const handleMyServicesClick = () => {
+    setShowServiceMenu(false);
+    setPage('escort-dashboard');
+  };
 
   const renderBadge = (count: number, onClick?: () => void) => {
     if (count <= 0) return null;
@@ -145,135 +194,189 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
     setPage(id as PageType);
   };
 
-  return (
-    <div className="flex flex-col h-full justify-between w-full relative">
-      <div className="space-y-1 w-full">
-        {/* Logo M - Click to refresh home */}
-        <div 
-          className="flex items-center cursor-pointer p-3 w-min rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mb-2" 
-          onClick={() => setPage('home')}
+  // Render escort action button with dropdown
+  const renderEscortActionButton = () => {
+    if (role !== UserRole.ESCORT) {
+      return (
+        <button 
+          className="bg-teal-500 hover:bg-teal-600 text-white rounded-full p-4 xl:px-8 xl:py-3.5 w-max xl:w-full font-bold text-lg shadow-lg transition-colors flex justify-center items-center"
+          onClick={() => role === UserRole.GUEST ? setPage('login') : onInteract('New Order')}
         >
-           <div className="h-8 w-8 text-black dark:text-white">
+          <span className="hidden xl:block">
+            {role === UserRole.PATIENT ? t.book : t.signup}
+          </span>
+          <PenSquare className="block xl:hidden h-6 w-6" />
+        </button>
+      );
+    }
+
+    return (
+      <div className="relative" ref={serviceMenuRef}>
+        <button 
+          className="bg-teal-500 hover:bg-teal-600 text-white rounded-full p-4 xl:px-8 xl:py-3.5 w-max xl:w-full font-bold text-lg shadow-lg transition-colors flex justify-center items-center gap-2"
+          onClick={() => setShowServiceMenu(!showServiceMenu)}
+        >
+          <span className="hidden xl:block flex items-center gap-2">
+            {t.online}
+            <ChevronDown className={`h-5 w-5 transition-transform ${showServiceMenu ? 'rotate-180' : ''}`} />
+          </span>
+          <Briefcase className="block xl:hidden h-6 w-6" />
+        </button>
+
+        {/* Service Menu Dropdown */}
+        {showServiceMenu && (
+          <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.1)] border border-slate-100 dark:border-slate-700 overflow-hidden z-50">
+            <div
+              className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+              onClick={handlePublishClick}
+            >
+              <PlusCircle className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              <span className="font-bold text-slate-900 dark:text-white">{t.publishService}</span>
+            </div>
+            <div
+              className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors border-t border-slate-100 dark:border-slate-700"
+              onClick={handleMyServicesClick}
+            >
+              <List className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              <span className="font-bold text-slate-900 dark:text-white">{t.myServices}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="flex flex-col h-full justify-between w-full relative">
+        <div className="space-y-1 w-full">
+          {/* Logo M - Click to refresh home */}
+          <div 
+            className="flex items-center cursor-pointer p-3 w-min rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mb-2" 
+            onClick={() => setPage('home')}
+          >
+            <div className="h-8 w-8 text-black dark:text-white">
               {/* Custom M Logo */}
               <svg viewBox="0 0 24 24" aria-hidden="true" className="h-8 w-8 fill-current">
                 <path d="M4 4h4l4 10 4-10h4v16h-4V11l-4 9-4-9v9H4V4z"/>
               </svg>
-           </div>
-        </div>
+            </div>
+          </div>
 
-        {/* Navigation Items */}
-        <nav className="space-y-1">
-          {navItems.map((item) => (
-            <div 
-              key={item.id}
-              onClick={() => handleNavClick(item.id)}
-              className={`flex items-center gap-4 p-3 rounded-full cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group w-max xl:w-full ${currentPage === item.id ? 'font-bold' : ''}`}
-            >
-              <div className="relative">
-                <item.icon className={`h-7 w-7 ${currentPage === item.id ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-                {'badge' in item && item.badge !== undefined && (
-                  item.badge > 0 ? (
-                    renderBadge(item.badge, item.onBadgeClick)
-                  ) : (
-                    renderDotBadge(item.onBadgeClick)
-                  )
-                )}
+          {/* Navigation Items */}
+          <nav className="space-y-1">
+            {navItems.map((item) => (
+              <div 
+                key={item.id}
+                onClick={() => handleNavClick(item.id)}
+                className={`flex items-center gap-4 p-3 rounded-full cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group w-max xl:w-full ${currentPage === item.id ? 'font-bold' : ''}`}
+              >
+                <div className="relative">
+                  <item.icon className={`h-7 w-7 ${currentPage === item.id ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+                  {'badge' in item && item.badge !== undefined && (
+                    item.badge > 0 ? (
+                      renderBadge(item.badge, item.onBadgeClick)
+                    ) : (
+                      renderDotBadge(item.onBadgeClick)
+                    )
+                  )}
+                </div>
+                <span className="hidden xl:block text-xl mr-4">{item.label}</span>
               </div>
-              <span className="hidden xl:block text-xl mr-4">{item.label}</span>
-            </div>
-          ))}
-          
-          {/* More Menu Trigger */}
-          <div className="relative">
-            <div 
-              className="flex items-center gap-4 p-3 rounded-full cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group w-max xl:w-full"
-              onClick={() => setShowMoreMenu(!showMoreMenu)}
-            >
-              <MoreHorizontal className="h-7 w-7" />
-              <span className="hidden xl:block text-xl mr-4">{t.more}</span>
-            </div>
+            ))}
+            
+            {/* More Menu Trigger */}
+            <div className="relative">
+              <div 
+                className="flex items-center gap-4 p-3 rounded-full cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group w-max xl:w-full"
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+              >
+                <MoreHorizontal className="h-7 w-7" />
+                <span className="hidden xl:block text-xl mr-4">{t.more}</span>
+              </div>
 
-            {/* Dropdown Menu */}
-            {showMoreMenu && (
-              <div className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.1)] border border-slate-100 dark:border-slate-700 overflow-hidden z-50">
-                {role === UserRole.ADMIN && (
+              {/* Dropdown Menu */}
+              {showMoreMenu && (
+                <div className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.1)] border border-slate-100 dark:border-slate-700 overflow-hidden z-50">
+                  {role === UserRole.ADMIN && (
+                    <div
+                      className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                      onClick={() => { setPage('admin'); setShowMoreMenu(false); }}
+                    >
+                      <Shield className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                      <span className="font-bold text-slate-900 dark:text-white">{t.admin}</span>
+                    </div>
+                  )}
                   <div
                     className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-                    onClick={() => { setPage('admin'); setShowMoreMenu(false); }}
+                    onClick={() => { setPage('settings'); setShowMoreMenu(false); }}
                   >
-                    <Shield className="h-5 w-5 text-teal-600" />
-                    <span className="font-bold text-slate-900 dark:text-white">{t.admin}</span>
+                    <Settings className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                    <span className="font-bold text-slate-900 dark:text-white">{t.settings}</span>
                   </div>
-                )}
-                <div
-                  className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-                  onClick={() => { setPage('settings'); setShowMoreMenu(false); }}
-                >
-                  <Settings className="h-5 w-5" />
-                  <span className="font-bold text-slate-900 dark:text-white">{t.settings}</span>
+                  <div
+                    className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                    onClick={() => { onInteract('Help Center'); setShowMoreMenu(false); }}
+                  >
+                    <HelpCircle className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                    <span className="font-bold text-slate-900 dark:text-white">{t.help}</span>
+                  </div>
                 </div>
-                <div
-                  className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-                  onClick={() => { onInteract('Help Center'); setShowMoreMenu(false); }}
-                >
-                  <HelpCircle className="h-5 w-5" />
-                  <span className="font-bold text-slate-900 dark:text-white">{t.help}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </nav>
+              )}
+            </div>
+          </nav>
 
-        {/* Main Action Button (Post/Book) */}
-        <div className="mt-4 w-full">
-           <button 
-            className="bg-teal-500 hover:bg-teal-600 text-white rounded-full p-4 xl:px-8 xl:py-3.5 w-max xl:w-[90%] font-bold text-lg shadow-lg transition-colors flex justify-center items-center"
-            onClick={() => role === UserRole.GUEST ? setPage('login') : onInteract(role === UserRole.PATIENT ? 'New Order' : 'Online Status')}
-           >
-             <span className="hidden xl:block">
-                {role === UserRole.PATIENT ? t.book : role === UserRole.ESCORT ? t.online : t.signup}
-             </span>
-             {/* FAB Icon for Desktop (Collapsed) */}
-             <PenSquare className="block xl:hidden h-6 w-6" />
-           </button>
+          {/* Main Action Button (Post/Book) */}
+          <div className="mt-4">
+            {renderEscortActionButton()}
+          </div>
+        </div>
+
+        {/* User Profile Bubble */}
+        <div className="mt-auto">
+          {role !== UserRole.GUEST ? (
+            <div
+              className="flex items-center gap-3 p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer w-max xl:w-full transition-colors relative group"
+              onClick={() => {
+                const confirmLogout = window.confirm(t.logout + '?');
+                if (confirmLogout && onLogout) {
+                  onLogout();
+                } else if (confirmLogout) {
+                  setRole(UserRole.GUEST);
+                }
+              }}
+            >
+              <img src={user?.profile?.avatarUrl || "https://picsum.photos/100/100?random=50"} className="h-10 w-10 rounded-full bg-slate-200" alt="User" />
+              <div className="hidden xl:block flex-1 leading-tight">
+                <div className="font-bold text-slate-900 dark:text-white">{user?.profile?.name || (role === UserRole.PATIENT ? 'User_9527' : 'Escort Wang')}</div>
+                <div className="text-slate-500 dark:text-slate-400 text-sm">@{user?.email?.split('@')[0] || (role === UserRole.PATIENT ? 'patient' : 'wang_escort')}</div>
+              </div>
+              <LogOut className="hidden xl:block h-5 w-5 text-slate-400 group-hover:text-red-500" />
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-3 p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer w-max xl:w-full transition-colors"
+              onClick={() => setPage('login')}
+            >
+              <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                <User className="h-6 w-6" />
+              </div>
+              <div className="hidden xl:block flex-1">
+                <div className="font-bold text-slate-900 dark:text-white">{t.guest}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* User Profile Bubble */}
-      <div className="mt-auto w-full mb-4">
-        {role !== UserRole.GUEST ? (
-          <div
-            className="flex items-center gap-3 p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer w-full transition-colors relative group"
-            onClick={() => {
-               const confirmLogout = window.confirm(t.logout + '?');
-               if (confirmLogout && onLogout) {
-                 onLogout();
-               } else if (confirmLogout) {
-                 setRole(UserRole.GUEST);
-               }
-            }}
-          >
-             <img src={user?.profile?.avatarUrl || "https://picsum.photos/100/100?random=50"} className="h-10 w-10 rounded-full bg-slate-200" alt="User" />
-             <div className="hidden xl:block flex-1 leading-tight">
-               <div className="font-bold text-slate-900 dark:text-white">{user?.profile?.name || (role === UserRole.PATIENT ? 'User_9527' : 'Escort Wang')}</div>
-               <div className="text-slate-500 dark:text-slate-400 text-sm">@{user?.email?.split('@')[0] || (role === UserRole.PATIENT ? 'patient' : 'wang_escort')}</div>
-             </div>
-             <LogOut className="hidden xl:block h-5 w-5 text-slate-400 group-hover:text-red-500" />
-          </div>
-        ) : (
-          <div
-            className="flex items-center gap-3 p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer w-full transition-colors"
-            onClick={() => setPage('login')}
-          >
-             <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-               <User className="h-6 w-6" />
-             </div>
-             <div className="hidden xl:block flex-1">
-               <div className="font-bold text-slate-900 dark:text-white">{t.guest}</div>
-             </div>
-          </div>
-        )}
-      </div>
-    </div>
+      {/* Service Publish Modal */}
+      {showPublishModal && role === UserRole.ESCORT && (
+        <ServicePublishModal
+          lang={lang}
+          onClose={() => setShowPublishModal(false)}
+          onSuccess={handlePublishSuccess}
+        />
+      )}
+    </>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
-import { ArrowLeft, Globe, Check, Bell, Tag, MessageSquare, Settings as SettingsIcon, Loader2, CheckCircle, Moon, Sun, Server, Trash } from 'lucide-react';
+import { ArrowLeft, Globe, Check, Bell, Tag, MessageSquare, Settings as SettingsIcon, Loader2, CheckCircle, Moon, Sun, Server, Trash, Monitor } from 'lucide-react';
 import { apiService } from '../services/apiService';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -18,7 +18,7 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ currentLang, setLang, onBack }) => {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, themeMode, setThemeMode } = useTheme();
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     orderNotifications: true,
     messageNotifications: true,
@@ -56,10 +56,11 @@ export const Settings: React.FC<SettingsProps> = ({ currentLang, setLang, onBack
       on: '开启',
       off: '关闭',
       display: '显示设置',
-      darkMode: '深色模式',
-      darkModeDesc: '开启后应用将切换到深色主题',
+      darkMode: '主题模式',
+      darkModeDesc: '选择适合您的界面主题',
       light: '浅色',
       dark: '深色',
+      system: '跟随系统',
       cache: '缓存管理',
       cacheManagement: '缓存管理',
       clearCache: '清除缓存',
@@ -92,10 +93,11 @@ export const Settings: React.FC<SettingsProps> = ({ currentLang, setLang, onBack
       on: 'On',
       off: 'Off',
       display: 'Display',
-      darkMode: 'Dark Mode',
-      darkModeDesc: 'Enable dark theme for the application',
+      darkMode: 'Theme',
+      darkModeDesc: 'Choose your preferred theme',
       light: 'Light',
       dark: 'Dark',
+      system: 'System',
       cache: 'Cache',
       cacheManagement: 'Cache Management',
       clearCache: 'Clear Cache',
@@ -297,7 +299,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentLang, setLang, onBack
             }`}
           >
             <div className="flex items-center justify-center gap-2">
-              {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+              {themeMode === 'system' ? <Monitor className="h-5 w-5" /> : theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
               <span>{t.display}</span>
             </div>
           </button>
@@ -354,31 +356,48 @@ export const Settings: React.FC<SettingsProps> = ({ currentLang, setLang, onBack
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
                     {t.darkModeDesc}
                   </p>
-                  
-                  <div className="flex gap-3">
+
+                  <div className="grid grid-cols-3 gap-3">
                     <button
-                      onClick={() => theme === 'dark' && toggleTheme()}
-                      className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
-                        theme === 'light'
+                      onClick={() => setThemeMode('light')}
+                      className={`py-3 px-4 rounded-xl font-medium transition-all flex flex-col items-center justify-center gap-2 ${
+                        themeMode === 'light'
                           ? 'bg-teal-600 text-white shadow-lg'
                           : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                       }`}
                     >
                       <Sun className="h-5 w-5" />
-                      <span>{t.light}</span>
+                      <span className="text-sm">{t.light}</span>
                     </button>
                     <button
-                      onClick={() => theme === 'light' && toggleTheme()}
-                      className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
-                        theme === 'dark'
+                      onClick={() => setThemeMode('dark')}
+                      className={`py-3 px-4 rounded-xl font-medium transition-all flex flex-col items-center justify-center gap-2 ${
+                        themeMode === 'dark'
                           ? 'bg-teal-600 text-white shadow-lg'
                           : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                       }`}
                     >
                       <Moon className="h-5 w-5" />
-                      <span>{t.dark}</span>
+                      <span className="text-sm">{t.dark}</span>
+                    </button>
+                    <button
+                      onClick={() => setThemeMode('system')}
+                      className={`py-3 px-4 rounded-xl font-medium transition-all flex flex-col items-center justify-center gap-2 ${
+                        themeMode === 'system'
+                          ? 'bg-teal-600 text-white shadow-lg'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      <Monitor className="h-5 w-5" />
+                      <span className="text-sm">{t.system}</span>
                     </button>
                   </div>
+
+                  {themeMode === 'system' && (
+                    <p className="mt-4 text-xs text-slate-500 dark:text-slate-400 text-center">
+                      {currentLang === 'zh' ? `当前跟随系统: ${theme === 'dark' ? '深色' : '浅色'}` : `Following system: ${theme === 'dark' ? 'Dark' : 'Light'}`}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

@@ -1061,6 +1061,15 @@ class ApiService {
     return [];
   }
 
+  // Start or get existing conversation with a user
+  public async startConversation(userId: string): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>('/messages/conversations', { userId });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to start conversation');
+  }
+
   // Get unread message count
   public async getUnreadCount(): Promise<number> {
     const response = await this.axiosInstance.get<ApiResponse<{ count: number }>>('/messages/unread-count');
@@ -1438,6 +1447,115 @@ class ApiService {
       return response.data.data;
     }
     throw new Error(response.data.message || 'Failed to export data');
+  }
+
+  // ========== ESCORT SERVICE PUBLISHING ==========
+
+  // Create escort service
+  public async createEscortService(data: {
+    serviceType: string;
+    title?: string;
+    description?: string;
+    pricePerHour: number;
+    startDate: string;
+    endDate: string;
+    availableWeekdays: number[];
+    timeSlots: { start: string; end: string }[];
+    hospitalIds?: string[];
+    areas?: string[];
+    tags?: string[];
+    maxDailyOrders?: number;
+  }): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>('/escorts/services', data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to create service');
+  }
+
+  // Get my escort services
+  public async getMyEscortServices(): Promise<any[]> {
+    const response = await this.axiosInstance.get<ApiResponse<any[]>>('/escorts/services/my');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // Get all active services (for patients)
+  public async getAllEscortServices(params?: {
+    serviceType?: string;
+    area?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<any>> {
+    const response = await this.axiosInstance.get<ApiResponse<PaginatedResponse<any>>>('/escorts/services/all', { params });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+  }
+
+  // Get service by ID
+  public async getEscortServiceById(serviceId: string): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/escorts/services/${serviceId}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get service');
+  }
+
+  // Update escort service
+  public async updateEscortService(serviceId: string, data: Partial<{
+    serviceType: string;
+    title?: string;
+    description?: string;
+    pricePerHour: number;
+    startDate: string;
+    endDate: string;
+    availableWeekdays: number[];
+    timeSlots: { start: string; end: string }[];
+    hospitalIds?: string[];
+    areas?: string[];
+    tags?: string[];
+    maxDailyOrders?: number;
+  }>): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/escorts/services/${serviceId}`, data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to update service');
+  }
+
+  // Toggle service status
+  public async toggleEscortServiceStatus(serviceId: string): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/escorts/services/${serviceId}/toggle`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to toggle service status');
+  }
+
+  // Delete escort service
+  public async deleteEscortService(serviceId: string): Promise<any> {
+    const response = await this.axiosInstance.delete<ApiResponse<any>>(`/escorts/services/${serviceId}`);
+    if (response.data.success) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to delete service');
+  }
+
+  // Get service availability
+  public async getServiceAvailability(serviceId: string, date: string): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/escorts/services/${serviceId}/availability`, {
+      params: { date }
+    });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get availability');
   }
 }
 

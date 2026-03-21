@@ -82,6 +82,7 @@ model User {
   reviewsGiven    Review[]      @relation("ReviewAuthor")
   reviewsReceived Review[]     @relation("ReviewTarget")
   notifications   Notification[]
+  escortServices  EscortService[]
 
   @@map("users")
 }
@@ -190,6 +191,7 @@ model Order {
   reviews     Review[]
   payment     Payment?
   statusHistory OrderStatusHistory[]
+  serviceBooking ServiceBooking?
 
   // Indexes for common queries
   @@index([patientId])
@@ -349,4 +351,60 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
+}
+
+// 陪诊师服务发布表
+model EscortService {
+  id                String      @id @default(uuid())
+  escortId          String      @map("escort_id")
+  serviceType       ServiceType @map("service_type")
+  title             String?
+  description       String?
+  pricePerHour      Float       @map("price_per_hour")
+  startDate         DateTime    @map("start_date") @db.Date
+  endDate           DateTime    @map("end_date") @db.Date
+  availableWeekdays Int[]       @map("available_weekdays") // [1,2,3,4,5,6,7] 表示周一到周日
+  timeSlots         Json        @map("time_slots") // [{"start": "09:00", "end": "12:00"}, ...]
+  hospitalIds       String[]    @map("hospital_ids") // 可服务的医院ID列表
+  areas             String[]    // 服务区域
+  tags              String[]    // 专长标签
+  isActive          Boolean     @default(true) @map("is_active")
+  maxDailyOrders    Int         @default(3) @map("max_daily_orders")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  escort   User             @relation(fields: [escortId], references: [id], onDelete: Cascade)
+  bookings ServiceBooking[]
+
+  // Indexes
+  @@index([escortId])
+  @@index([serviceType])
+  @@index([isActive])
+  @@index([startDate, endDate])
+  @@map("escort_services")
+}
+
+// 服务预约时段表
+model ServiceBooking {
+  id          String    @id @default(uuid())
+  serviceId   String    @map("service_id")
+  orderId     String?   @unique @map("order_id")
+  bookingDate DateTime  @map("booking_date") @db.Date
+  startTime   String    @map("start_time") // HH:mm 格式
+  endTime     String    @map("end_time")   // HH:mm 格式
+  status      String    @default("available") // available, booked, completed, cancelled
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  service EscortService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  order   Order?        @relation(fields: [orderId], references: [id])
+
+  // Indexes
+  @@index([serviceId])
+  @@index([orderId])
+  @@index([bookingDate])
+  @@index([status])
+  @@unique([serviceId, bookingDate, startTime, endTime])
+  @@map("service_bookings")
 }

@@ -1,7 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Language, UserInfo } from '../types';
 import { apiService } from '../services/apiService';
-import { Settings, Bell, CheckCircle, Clock, CreditCard, MessageCircle, Trash2, Loader2, Check, X, RefreshCw, ArrowRight, AlertCircle } from 'lucide-react';
+import {
+  Bell,
+  CheckCircle,
+  CreditCard,
+  MessageCircle,
+  Trash2,
+  Loader2,
+  Check,
+  X,
+  RefreshCw,
+  AlertCircle,
+  Inbox,
+  Filter,
+  ChevronRight,
+  Package,
+  Shield,
+  Sparkles,
+  Zap
+} from 'lucide-react';
 
 interface NotificationsProps {
   lang: Language;
@@ -16,9 +34,10 @@ interface Notification {
   content: string;
   isRead: boolean;
   is_read?: boolean;
-  data?: any;
+  data?: Record<string, unknown>;
   createdAt: string;
   created_at?: string;
+  priority?: 'high' | 'normal' | 'low';
 }
 
 // 通知类型映射
@@ -30,6 +49,8 @@ const NOTIFICATION_TYPES = {
   SYSTEM: 'system',
   REVIEW: 'review',
   REFUND: 'refund',
+  PROMOTION: 'promotion',
+  SECURITY: 'security',
 };
 
 // Mock 通知数据
@@ -40,8 +61,9 @@ const MOCK_NOTIFICATIONS: Notification[] = [
     title: '订单状态更新',
     content: '您的订单 #ORD20240320001 已完成服务，请对陪诊师进行评价',
     isRead: false,
+    priority: 'high',
     data: { orderId: 'order-001', orderNo: 'ORD20240320001' },
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2小时前
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
   },
   {
     id: 'notif-002',
@@ -49,8 +71,9 @@ const MOCK_NOTIFICATIONS: Notification[] = [
     title: '支付成功',
     content: '您已成功支付订单 #ORD20240318002，金额 ¥280',
     isRead: true,
+    priority: 'normal',
     data: { orderId: 'order-002', orderNo: 'ORD20240318002', amount: 280 },
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // 1天前
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   },
   {
     id: 'notif-003',
@@ -58,26 +81,49 @@ const MOCK_NOTIFICATIONS: Notification[] = [
     title: '新消息',
     content: '王医生给您发送了一条消息："明天上午9点在医院门口见"',
     isRead: false,
+    priority: 'high',
     data: { messageId: 'msg-001', senderId: 'escort-001', senderName: '王医生' },
-    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString() // 30分钟前
+    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString()
   },
   {
     id: 'notif-004',
+    type: 'PROMOTION',
+    title: '限时优惠',
+    content: '春季健康季，陪诊服务限时8折优惠，快来预约吧！',
+    isRead: false,
+    priority: 'low',
+    data: { type: 'promotion', code: 'SPRING20' },
+    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'notif-005',
+    type: 'SECURITY',
+    title: '账号安全提醒',
+    content: '您的账号在新设备上登录，如非本人操作请立即修改密码',
+    isRead: false,
+    priority: 'high',
+    data: { type: 'security_alert', device: 'iPhone 15 Pro' },
+    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'notif-006',
+    type: 'REFUND',
+    title: '退款申请已通过',
+    content: '您的订单 #ORD20240315001 退款申请已通过，款项将原路退回',
+    isRead: true,
+    priority: 'normal',
+    data: { orderId: 'order-003', orderNo: 'ORD20240315001', status: 'APPROVED' },
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'notif-007',
     type: 'SYSTEM',
     title: '系统公告',
     content: 'MediMate 医伴平台全新升级，新增在线支付功能，欢迎使用！',
     isRead: true,
+    priority: 'low',
     data: { type: 'system_announcement' },
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() // 3天前
-  },
-  {
-    id: 'notif-005',
-    type: 'REFUND',
-    title: '退款申请已通过',
-    content: '您的订单 #ORD20240315001 退款申请已通过，款项将原路退回',
-    isRead: false,
-    data: { orderId: 'order-003', orderNo: 'ORD20240315001', status: 'APPROVED' },
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() // 5小时前
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
   }
 ];
 
@@ -117,14 +163,15 @@ const usePullToRefresh = (onRefresh: () => Promise<void>) => {
   return { isRefreshing, pullDistance, handleTouchStart, handleTouchMove, handleTouchEnd };
 };
 
-export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
+export const Notifications: React.FC<NotificationsProps> = ({ lang, onNavigate }) => {
+  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'high'>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
   const [clickedId, setClickedId] = useState<string | null>(null);
-  const [useMockData, setUseMockData] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const refreshData = async () => {
@@ -135,35 +182,32 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
 
   useEffect(() => {
     loadNotifications();
-    
-    // 清理超时定时器
+
     return () => {
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
       }
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedType]);
 
   const handleNotificationClick = async (notification: Notification) => {
     try {
       setClickedId(notification.id);
-      
-      // 支持 isRead 和 is_read 两种格式
+
       const isRead = notification.isRead ?? notification.is_read;
       if (!isRead) {
         await apiService.markNotificationAsRead(notification.id);
-        // 更新本地状态
-        setNotifications(prev => prev.map(n => 
+        setNotifications(prev => prev.map(n =>
           n.id === notification.id ? { ...n, isRead: true, is_read: true } : n
         ));
       }
-      
+
       let navigateType = '';
       let navigateId = '';
-      
-      // 使用映射后的类型
+
       const mappedType = NOTIFICATION_TYPES[notification.type as keyof typeof NOTIFICATION_TYPES] || notification.type.toLowerCase();
-      
+
       switch (mappedType) {
         case 'order':
           navigateType = 'order';
@@ -186,22 +230,24 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
           navigateId = notification.data?.orderId || notification.id;
           break;
         case 'system':
-          navigateType = 'system';
+        case 'promotion':
+        case 'security':
+          navigateType = mappedType;
           navigateId = notification.id;
           break;
         default:
           navigateType = mappedType;
           navigateId = notification.data?.orderId || notification.data?.id || notification.id;
       }
-      
+
       if (onNavigate) {
         onNavigate(navigateType, navigateId);
       }
-      
+
       setTimeout(() => {
         setClickedId(null);
       }, 200);
-      
+
     } catch (error) {
       console.error('Failed to handle notification click:', error);
       setClickedId(null);
@@ -214,55 +260,77 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
       setError(null);
       setUseMockData(false);
 
-      // 设置 5 秒超时
       loadingTimeoutRef.current = setTimeout(() => {
         console.warn('Notifications loading timeout, switching to mock data');
         setUseMockData(true);
-        setNotifications(MOCK_NOTIFICATIONS);
+        setNotifications(filterNotifications(MOCK_NOTIFICATIONS));
         setLoading(false);
         setError('数据加载超时，已显示演示数据');
       }, 5000);
 
       const data = await apiService.getNotifications(1, 50, activeTab === 'unread');
-      
-      // 清除超时定时器
+
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
         loadingTimeoutRef.current = null;
       }
 
-      // 处理 API 返回的数据结构
       const notifications = data?.notifications || data?.data?.notifications || [];
-      
+
       if (notifications.length > 0) {
-        // 标准化通知数据格式
-        const normalizedNotifications = notifications.map((n: any) => ({
+        const normalizedNotifications = notifications.map((n: Record<string, unknown>) => ({
           ...n,
-          isRead: n.isRead ?? n.is_read ?? false,
-          createdAt: n.createdAt || n.created_at || new Date().toISOString(),
+          isRead: (n.isRead as boolean) ?? (n.is_read as boolean) ?? false,
+          createdAt: (n.createdAt as string) || (n.created_at as string) || new Date().toISOString(),
         }));
-        setNotifications(normalizedNotifications);
+        setNotifications(filterNotifications(normalizedNotifications));
       } else {
-        // API 返回空数据，使用 Mock 数据
         setUseMockData(true);
-        setNotifications(MOCK_NOTIFICATIONS);
+        setNotifications(filterNotifications(MOCK_NOTIFICATIONS));
       }
     } catch (error) {
       console.error('Failed to load notifications:', error);
-      // 出错时使用 Mock 数据
       setUseMockData(true);
-      setNotifications(MOCK_NOTIFICATIONS);
+      setNotifications(filterNotifications(MOCK_NOTIFICATIONS));
       setError('无法连接到服务器，已显示演示数据');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleMarkAsRead = async (id: string) => {
+  const filterNotifications = (notifs: Notification[]) => {
+    let filtered = notifs;
+
+    if (activeTab === 'unread') {
+      filtered = filtered.filter(n => !(n.isRead ?? n.is_read));
+    } else if (activeTab === 'high') {
+      filtered = filtered.filter(n => n.priority === 'high' || !(n.isRead ?? n.is_read));
+    }
+
+    if (selectedType) {
+      const mappedType = NOTIFICATION_TYPES[selectedType as keyof typeof NOTIFICATION_TYPES] || selectedType.toLowerCase();
+      filtered = filtered.filter(n => {
+        const nMappedType = NOTIFICATION_TYPES[n.type as keyof typeof NOTIFICATION_TYPES] || n.type.toLowerCase();
+        return nMappedType === mappedType;
+      });
+    }
+
+    return filtered.sort((a, b) => {
+      const aUnread = !(a.isRead ?? a.is_read);
+      const bUnread = !(b.isRead ?? b.is_read);
+      if (aUnread !== bUnread) return aUnread ? -1 : 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  };
+
+  const handleMarkAsRead = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     try {
       setProcessing(id);
       await apiService.markNotificationAsRead(id);
-      await loadNotifications();
+      setNotifications(prev => prev.map(n =>
+        n.id === id ? { ...n, isRead: true, is_read: true } : n
+      ));
     } catch (error) {
       console.error('Failed to mark as read:', error);
     } finally {
@@ -274,7 +342,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
     try {
       setProcessing('all');
       await apiService.markAllNotificationsAsRead();
-      await loadNotifications();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true, is_read: true })));
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     } finally {
@@ -282,11 +350,12 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     try {
       setProcessing(id);
       await apiService.deleteNotification(id);
-      await loadNotifications();
+      setNotifications(prev => prev.filter(n => n.id !== id));
     } catch (error) {
       console.error('Failed to delete notification:', error);
     } finally {
@@ -294,35 +363,65 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
     }
   };
 
-  const getIcon = (type: string) => {
+  const getIconConfig = (type: string) => {
     const mappedType = NOTIFICATION_TYPES[type as keyof typeof NOTIFICATION_TYPES] || type.toLowerCase();
-    const iconMap: Record<string, any> = {
-      order: Bell,
-      payment: CreditCard,
-      refund: RefreshCw,
-      message: MessageCircle,
-      review: CheckCircle,
-      system: Settings,
+    type IconComponent = React.ComponentType<{ className?: string }>;
+    const config: Record<string, { icon: IconComponent; bg: string; color: string; border: string }> = {
+      order: {
+        icon: Package,
+        bg: 'bg-blue-50',
+        color: 'text-blue-600',
+        border: 'border-blue-200'
+      },
+      payment: {
+        icon: CreditCard,
+        bg: 'bg-emerald-50',
+        color: 'text-emerald-600',
+        border: 'border-emerald-200'
+      },
+      refund: {
+        icon: RefreshCw,
+        bg: 'bg-amber-50',
+        color: 'text-amber-600',
+        border: 'border-amber-200'
+      },
+      message: {
+        icon: MessageCircle,
+        bg: 'bg-purple-50',
+        color: 'text-purple-600',
+        border: 'border-purple-200'
+      },
+      review: {
+        icon: CheckCircle,
+        bg: 'bg-yellow-50',
+        color: 'text-yellow-600',
+        border: 'border-yellow-200'
+      },
+      system: {
+        icon: Bell,
+        bg: 'bg-slate-50',
+        color: 'text-slate-600',
+        border: 'border-slate-200'
+      },
+      promotion: {
+        icon: Sparkles,
+        bg: 'bg-pink-50',
+        color: 'text-pink-600',
+        border: 'border-pink-200'
+      },
+      security: {
+        icon: Shield,
+        bg: 'bg-red-50',
+        color: 'text-red-600',
+        border: 'border-red-200'
+      },
     };
-    return iconMap[mappedType] || Bell;
-  };
-
-  const getColor = (type: string) => {
-    const mappedType = NOTIFICATION_TYPES[type as keyof typeof NOTIFICATION_TYPES] || type.toLowerCase();
-    const colorMap: Record<string, string> = {
-      order: 'text-teal-500',
-      payment: 'text-blue-500',
-      refund: 'text-orange-500',
-      message: 'text-purple-500',
-      review: 'text-yellow-500',
-      system: 'text-slate-500',
-    };
-    return colorMap[mappedType] || 'text-slate-500';
+    return config[mappedType] || config.system;
   };
 
   const formatTime = (dateStr: string) => {
     if (!dateStr) return lang === 'zh' ? '刚刚' : 'Just now';
-    
+
     const date = new Date(dateStr);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -334,41 +433,66 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
     if (minutes < 60) return lang === 'zh' ? `${minutes}分钟前` : `${minutes}m ago`;
     if (hours < 24) return lang === 'zh' ? `${hours}小时前` : `${hours}h ago`;
     if (days < 7) return lang === 'zh' ? `${days}天前` : `${days}d ago`;
-    return date.toLocaleDateString();
+    return date.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' });
   };
 
   const t = {
     zh: {
-      title: '消息通知',
+      title: '消息中心',
       all: '全部',
       unread: '未读',
+      important: '重要',
       noNotifications: '暂无通知',
       markAllRead: '全部已读',
       loading: '加载中...',
       retry: '重试',
       useDemo: '使用演示数据',
+      filter: '筛选',
+      clearFilter: '清除筛选',
+      emptyDesc: '您还没有收到任何通知',
+      pullToRefresh: '下拉刷新',
+      newNotifications: '条新消息'
     },
     en: {
       title: 'Notifications',
       all: 'All',
       unread: 'Unread',
+      important: 'Important',
       noNotifications: 'No notifications',
       markAllRead: 'Mark all read',
       loading: 'Loading...',
       retry: 'Retry',
       useDemo: 'Use Demo Data',
+      filter: 'Filter',
+      clearFilter: 'Clear Filter',
+      emptyDesc: 'You haven\'t received any notifications yet',
+      pullToRefresh: 'Pull to refresh',
+      newNotifications: 'new messages'
     }
   }[lang];
 
   const unreadCount = notifications.filter(n => !(n.isRead ?? n.is_read)).length;
+  const highPriorityCount = notifications.filter(n => n.priority === 'high' && !(n.isRead ?? n.is_read)).length;
+
+  const notificationTypes = [
+    { key: 'order', label: lang === 'zh' ? '订单' : 'Orders', icon: Package },
+    { key: 'payment', label: lang === 'zh' ? '支付' : 'Payments', icon: CreditCard },
+    { key: 'message', label: lang === 'zh' ? '消息' : 'Messages', icon: MessageCircle },
+    { key: 'promotion', label: lang === 'zh' ? '优惠' : 'Promos', icon: Sparkles },
+    { key: 'security', label: lang === 'zh' ? '安全' : 'Security', icon: Shield },
+  ];
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-teal-500 mb-2" />
-        <span className="text-slate-500">{t.loading}</span>
-        <span className="text-xs text-slate-400 mt-2">{lang === 'zh' ? '加载时间较长？点击取消' : 'Taking too long? Click to cancel'}</span>
-        <button 
+      <div className="flex flex-col items-center justify-center h-96">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-teal-500 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Bell className="h-6 w-6 text-teal-500" />
+          </div>
+        </div>
+        <span className="text-slate-500 mt-4">{t.loading}</span>
+        <button
           onClick={() => {
             if (loadingTimeoutRef.current) {
               clearTimeout(loadingTimeoutRef.current);
@@ -376,9 +500,8 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
             setUseMockData(true);
             setNotifications(MOCK_NOTIFICATIONS);
             setLoading(false);
-            setError('已切换到演示数据模式');
           }}
-          className="mt-3 px-4 py-1.5 text-sm text-teal-600 hover:text-teal-700 font-medium"
+          className="mt-4 px-4 py-2 text-sm text-teal-600 hover:text-teal-700 font-medium hover:bg-teal-50 rounded-full transition-colors"
         >
           {t.useDemo}
         </button>
@@ -388,26 +511,141 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
 
   return (
     <div
-      className="pb-20"
+      className="pb-20 min-h-screen bg-slate-50/50"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       {/* Pull to refresh indicator */}
       <div
-        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center transition-transform duration-200 bg-white"
+        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center transition-transform duration-200 pointer-events-none"
         style={{ transform: `translateY(${pullDistance}px)`, height: pullDistance > 0 ? '60px' : '0' }}
       >
-        {isRefreshing ? (
-          <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
-        ) : (
-          <RefreshCw className="h-6 w-6 text-slate-400" style={{ opacity: pullDistance / 60 }} />
-        )}
+        <div className="bg-white rounded-full shadow-lg p-3">
+          {isRefreshing ? (
+            <Loader2 className="h-5 w-5 animate-spin text-teal-500" />
+          ) : (
+            <RefreshCw className="h-5 w-5 text-slate-400" style={{ opacity: pullDistance / 60, transform: `rotate(${(pullDistance / 60) * 360}deg)` }} />
+          )}
+        </div>
       </div>
 
-      {/* 错误提示 */}
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white border-b border-slate-100">
+        <div className="flex justify-between items-center px-4 py-4">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/20">
+                <Bell className="h-5 w-5 text-white" />
+              </div>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-900">{t.title}</h1>
+              <p className="text-xs text-slate-500">
+                {unreadCount > 0 ? `${unreadCount}${t.newNotifications}` : lang === 'zh' ? '全部已读' : 'All read'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllAsRead}
+                disabled={processing === 'all'}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-teal-600 hover:text-teal-700 font-medium hover:bg-teal-50 rounded-full transition-colors"
+              >
+                {processing === 'all' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">{t.markAllRead}</span>
+              </button>
+            )}
+
+            <div className="relative">
+              <button
+                onClick={() => setShowFilterMenu(!showFilterMenu)}
+                className={`p-2 rounded-full transition-colors ${showFilterMenu || selectedType ? 'bg-teal-100 text-teal-600' : 'hover:bg-slate-100 text-slate-600'}`}
+              >
+                <Filter className="h-5 w-5" />
+              </button>
+
+              {showFilterMenu && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50">
+                  <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    {t.filter}
+                  </div>
+                  {notificationTypes.map(({ key, label, icon: Icon }) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setSelectedType(selectedType === key ? null : key);
+                        setShowFilterMenu(false);
+                      }}
+                      className={`w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors ${selectedType === key ? 'bg-teal-50 text-teal-600' : 'text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                      {selectedType === key && <Check className="h-4 w-4 ml-auto" />}
+                    </button>
+                  ))}
+                  {selectedType && (
+                    <>
+                      <div className="border-t border-slate-100 my-1"></div>
+                      <button
+                        onClick={() => {
+                          setSelectedType(null);
+                          setShowFilterMenu(false);
+                        }}
+                        className="w-full px-3 py-2 flex items-center gap-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                        {t.clearFilter}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex px-4 pb-3 gap-2">
+          {[
+            { key: 'all', label: t.all, count: notifications.length },
+            { key: 'unread', label: t.unread, count: unreadCount },
+            { key: 'high', label: t.important, count: highPriorityCount },
+          ].map(({ key, label, count }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key as 'all' | 'unread' | 'high')}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                activeTab === key
+                  ? 'bg-teal-500 text-white shadow-md shadow-teal-500/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {label}
+              {count > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === key ? 'bg-white/20' : 'bg-slate-200'}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Error Banner */}
       {error && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-center justify-between">
+        <div className="mx-4 mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 text-amber-600" />
             <span className="text-sm text-amber-800">{error}</span>
@@ -422,103 +660,105 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
         </div>
       )}
 
-      <div className="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-100">
-        <div className="flex justify-between items-center px-4 py-3">
-          <h1 className="text-xl font-bold text-slate-900">{t.title}</h1>
-          {unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllAsRead}
-              disabled={processing === 'all'}
-              className="text-sm text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1"
-            >
-              {processing === 'all' ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4" />
-              )}
-              {t.markAllRead}
-            </button>
-          )}
-        </div>
-        <div className="flex">
-          <div
-            className="flex-1 flex justify-center hover:bg-slate-50 cursor-pointer transition-colors relative py-3"
-            onClick={() => setActiveTab('all')}
-          >
-            <span className={`font-bold text-sm ${activeTab === 'all' ? 'text-slate-900' : 'text-slate-500'}`}>
-              {t.all}
-            </span>
-            {activeTab === 'all' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-10 h-1 bg-teal-500 rounded-full"></div>}
-          </div>
-          <div
-            className="flex-1 flex justify-center hover:bg-slate-50 cursor-pointer transition-colors relative py-3"
-            onClick={() => setActiveTab('unread')}
-          >
-            <span className={`font-bold text-sm ${activeTab === 'unread' ? 'text-slate-900' : 'text-slate-500'}`}>
-              {t.unread} {unreadCount > 0 && `(${unreadCount})`}
-            </span>
-            {activeTab === 'unread' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-10 h-1 bg-teal-500 rounded-full"></div>}
-          </div>
-        </div>
-      </div>
-
-      <div className="divide-y divide-slate-100">
+      {/* Notification List */}
+      <div className="p-4 space-y-3">
         {notifications.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
-            {t.noNotifications}
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+              <Inbox className="h-10 w-10 text-slate-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">{t.noNotifications}</h3>
+            <p className="text-sm text-slate-500">{t.emptyDesc}</p>
           </div>
         ) : (
-          notifications.map((notification) => {
-            const Icon = getIcon(notification.type);
-            const colorClass = getColor(notification.type);
+          notifications.map((notification, index) => {
+            const { icon: Icon, bg, color, border } = getIconConfig(notification.type);
             const isClicked = clickedId === notification.id;
             const isRead = notification.isRead ?? notification.is_read;
             const createdAt = notification.createdAt || notification.created_at;
+            const isHighPriority = notification.priority === 'high' && !isRead;
 
             return (
               <div
                 key={notification.id}
-                className={`p-4 cursor-pointer transition-all duration-200 flex gap-3 ${isClicked ? 'bg-teal-50 scale-[0.98]' : 'hover:bg-slate-50'} ${!isRead ? 'bg-blue-50/50' : ''}`}
                 onClick={() => handleNotificationClick(notification)}
+                className={`group relative bg-white rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden ${
+                  isClicked ? 'scale-[0.98] shadow-md' : 'hover:shadow-lg hover:-translate-y-0.5'
+                } ${
+                  isHighPriority
+                    ? 'border-red-200 shadow-red-100'
+                    : isRead
+                    ? 'border-slate-100'
+                    : 'border-teal-200 shadow-teal-50 shadow-sm'
+                }`}
+                style={{ animationDelay: `${index * 50}ms` }}
               >
-                <div className="flex-shrink-0 w-8 flex justify-end">
-                  <Icon className={`h-7 w-7 ${colorClass} fill-current`} />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 mb-1">
-                      {!isRead && (
-                        <span className="w-2 h-2 bg-teal-500 rounded-full"></span>
-                      )}
-                      <span className="font-bold text-slate-900">{notification.title}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className={`transition-opacity duration-200 ${isClicked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                        <ArrowRight className="h-4 w-4 text-teal-600" />
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(notification.id);
-                        }}
-                        disabled={processing === notification.id}
-                        className="text-slate-400 hover:text-red-500"
-                      >
-                        {processing === notification.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
+                {/* Priority Indicator */}
+                {isHighPriority && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-red-400 to-red-500"></div>
+                )}
+
+                <div className="p-4 flex gap-4">
+                  {/* Icon */}
+                  <div className={`flex-shrink-0 w-12 h-12 ${bg} ${color} rounded-xl flex items-center justify-center border ${border} transition-transform group-hover:scale-105`}>
+                    <Icon className="h-6 w-6" />
                   </div>
-                  <div className="text-slate-900 text-[15px]">
-                    <div className="text-slate-600 mt-1">{notification.content}</div>
-                    <div className="flex items-center justify-between mt-1">
-                      <div className="text-slate-400 text-sm">{formatTime(createdAt)}</div>
-                      <div className={`flex items-center gap-1 text-teal-600 text-sm transition-opacity duration-200 ${isClicked ? 'opacity-100' : 'opacity-0'}`}>
-                        <span className="text-xs font-medium">查看详情</span>
-                        <ArrowRight className="h-3 w-3" />
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {!isRead && (
+                          <span className="flex-shrink-0 w-2 h-2 bg-teal-500 rounded-full"></span>
+                        )}
+                        <h3 className={`font-semibold text-slate-900 truncate ${!isRead ? 'text-base' : 'text-sm'}`}>
+                          {notification.title}
+                        </h3>
+                        {isHighPriority && (
+                          <Zap className="h-4 w-4 text-red-500 flex-shrink-0" />
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-400 flex-shrink-0">
+                        {formatTime(createdAt)}
+                      </span>
+                    </div>
+
+                    <p className={`mt-1 text-slate-600 line-clamp-2 ${!isRead ? 'text-sm' : 'text-xs'}`}>
+                      {notification.content}
+                    </p>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center gap-2">
+                        {!isRead && (
+                          <button
+                            onClick={(e) => handleMarkAsRead(notification.id, e)}
+                            disabled={processing === notification.id}
+                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-teal-600 bg-teal-50 hover:bg-teal-100 rounded-full transition-colors"
+                          >
+                            {processing === notification.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Check className="h-3 w-3" />
+                            )}
+                            {lang === 'zh' ? '标记已读' : 'Mark read'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => handleDelete(notification.id, e)}
+                          disabled={processing === notification.id}
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                        >
+                          {processing === notification.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
+                        <ChevronRight className="h-4 w-4 text-slate-300" />
                       </div>
                     </div>
                   </div>
@@ -528,6 +768,14 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, user, onNavi
           })
         )}
       </div>
+
+      {/* Click outside to close filter menu */}
+      {showFilterMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowFilterMenu(false)}
+        ></div>
+      )}
     </div>
   );
 };

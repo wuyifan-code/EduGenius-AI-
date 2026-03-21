@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Language, Hospital, UserInfo } from '../types';
 import { apiService } from '../services/apiService';
-import { Search, MoreHorizontal, Settings, MapPin, TrendingUp, Loader2, Star, Phone, Building2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Search, MoreHorizontal, Settings, MapPin, TrendingUp, Loader2, Star, Phone, Building2, AlertCircle, RefreshCw, ChevronRight } from 'lucide-react';
 
 interface ExploreProps {
   lang: Language;
   user?: UserInfo | null;
+  onSelectHospital?: (hospital: Hospital) => void;
 }
 
 // Mock 医院数据用于降级显示
@@ -57,7 +58,7 @@ const MOCK_HOSPITALS: Hospital[] = [
   },
 ];
 
-export const Explore: React.FC<ExploreProps> = ({ lang, user }) => {
+export const Explore: React.FC<ExploreProps> = ({ lang, user, onSelectHospital }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,22 +183,28 @@ export const Explore: React.FC<ExploreProps> = ({ lang, user }) => {
   const displayHospitals = searchQuery ? searchResults : hospitals;
 
   const renderHospitalCard = (hospital: Hospital, index: number) => (
-    <div key={hospital.id || index} className="px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors relative">
-      <div className="flex justify-between text-xs text-slate-500 mb-0.5">
-        <span>{index + 1} · {hospital.department || hospital.level || 'Hospital'} · {lang === 'zh' ? '热门' : 'Trending'}</span>
-        <MoreHorizontal className="h-4 w-4" />
+    <div 
+      key={hospital.id || index} 
+      className="px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors relative flex items-center justify-between"
+      onClick={() => onSelectHospital?.(hospital)}
+    >
+      <div className="flex-1">
+        <div className="flex justify-between text-xs text-slate-500 mb-0.5">
+          <span>{index + 1} · {hospital.department || hospital.level || 'Hospital'} · {lang === 'zh' ? '热门' : 'Trending'}</span>
+        </div>
+        <div className="font-bold text-slate-900 text-base">{hospital.name}</div>
+        <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+          {hospital.level && <span>{hospital.level}</span>}
+          {hospital.rating && (
+            <span className="flex items-center gap-1">
+              <Star className="h-3 w-3 text-yellow-500 fill-current" />
+              {hospital.rating.toFixed(1)}
+            </span>
+          )}
+          {hospital.address && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{hospital.address.substring(0, 15)}...</span>}
+        </div>
       </div>
-      <div className="font-bold text-slate-900 text-base">{hospital.name}</div>
-      <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
-        {hospital.level && <span>{hospital.level}</span>}
-        {hospital.rating && (
-          <span className="flex items-center gap-1">
-            <Star className="h-3 w-3 text-yellow-500 fill-current" />
-            {hospital.rating.toFixed(1)}
-          </span>
-        )}
-        {hospital.address && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{hospital.address.substring(0, 15)}...</span>}
-      </div>
+      <ChevronRight className="h-5 w-5 text-slate-400" />
     </div>
   );
 
@@ -314,7 +321,11 @@ export const Explore: React.FC<ExploreProps> = ({ lang, user }) => {
         <div className="border-b border-slate-100">
           <div className="py-3 px-4 text-xl font-black text-slate-900">{t.local}</div>
           {displayHospitals.slice(0, 5).map((hospital, i) => (
-            <div key={hospital.id || i} className="px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors flex gap-3">
+            <div 
+              key={hospital.id || i} 
+              className="px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors flex gap-3"
+              onClick={() => onSelectHospital?.(hospital)}
+            >
               <div className="w-16 h-16 bg-slate-200 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Building2 className="h-8 w-8 text-slate-400" />
               </div>
@@ -330,6 +341,7 @@ export const Explore: React.FC<ExploreProps> = ({ lang, user }) => {
                   </div>
                 )}
               </div>
+              <ChevronRight className="h-5 w-5 text-slate-400 self-center" />
             </div>
           ))}
         </div>

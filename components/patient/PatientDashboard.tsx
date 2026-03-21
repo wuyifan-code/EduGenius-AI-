@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getHealthTriage } from '../../services/geminiService';
 import { apiService } from '../../services/apiService';
 import { EscortProfile, Language } from '../../types';
-import { MapPin, MessageCircle, Heart, RefreshCw, Loader2, AlertCircle, Star, ChevronRight } from 'lucide-react';
+import { MapPin, MessageCircle, Heart, RefreshCw, Loader2, AlertCircle, Star, ChevronRight, Hospital, ClipboardList } from 'lucide-react';
 import { EscortDetail } from '../EscortDetail';
 import { OrderConfirmation } from '../OrderConfirmation';
 import { OrderList } from '../OrderList';
@@ -352,7 +352,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang }) => {
           {t.services.map((service, idx) => (
             <div key={idx} className="flex-shrink-0 bg-slate-50 rounded-xl p-3 w-24 text-center">
               <div className="w-10 h-10 bg-teal-100 rounded-full mx-auto mb-2 flex items-center justify-center">
-                <span className="text-lg">🏥</span>
+                <Hospital className="h-5 w-5 text-teal-600" />
               </div>
               <p className="font-bold text-slate-900 text-sm">{service.label}</p>
               <p className="text-xs text-slate-500">{service.sub}</p>
@@ -369,7 +369,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang }) => {
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center">
-              <span className="text-xl">📋</span>
+              <ClipboardList className="h-5 w-5 text-teal-600" />
             </div>
             <div>
               <h3 className="font-bold text-slate-900">{t.myOrders}</h3>

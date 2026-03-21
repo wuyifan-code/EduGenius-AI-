@@ -47,6 +47,69 @@ export interface Conversation {
 export class MessagesService {
   constructor(private prisma: PrismaService) {}
 
+  // Create or get existing conversation with a user
+  async createOrGetConversation(userId: string, partnerId: string) {
+    // Verify partner exists
+    const partner = await this.prisma.user.findUnique({
+      where: { id: partnerId },
+      include: {
+        profile: {
+          select: {
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!partner) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Find last message between the two users
+    const lastMessage = await this.prisma.message.findFirst({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: partnerId },
+          { senderId: partnerId, receiverId: userId },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Count unread messages
+    const unreadCount = await this.prisma.message.count({
+      where: {
+        senderId: partnerId,
+        receiverId: userId,
+        isRead: false,
+      },
+    });
+
+    // Return conversation object
+    return {
+      partnerId: partner.id,
+      partner: {
+        id: partner.id,
+        email: partner.email,
+        profile: partner.profile,
+      },
+      lastMessage: lastMessage
+        ? {
+            id: lastMessage.id,
+            content: lastMessage.content,
+            type: lastMessage.type,
+            imageUrl: lastMessage.imageUrl,
+            createdAt: lastMessage.createdAt,
+            isRead: lastMessage.isRead,
+            senderId: lastMessage.senderId,
+          }
+        : null,
+      unreadCount,
+      updatedAt: lastMessage?.createdAt || new Date(),
+    };
+  }
+
   // 创建通知
   private async createNotification(
     userId: string,

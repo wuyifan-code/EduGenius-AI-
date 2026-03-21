@@ -20,6 +20,19 @@ export class MessagesController {
     };
   }
 
+  @Post('conversations')
+  @ApiOperation({ summary: 'Start or get a conversation with a user' })
+  async createConversation(
+    @Request() req: any,
+    @Body() body: { userId: string },
+  ) {
+    const conversation = await this.messagesService.createOrGetConversation(req.user.sub, body.userId);
+    return {
+      success: true,
+      data: conversation,
+    };
+  }
+
   @Get('unread-count')
   @ApiOperation({ summary: 'Get total unread message count' })
   async getUnreadCount(@Request() req: any) {

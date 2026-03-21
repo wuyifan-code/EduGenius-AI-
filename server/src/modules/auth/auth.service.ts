@@ -171,8 +171,14 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
 
-    await this.prisma.refreshToken.create({
-      data: {
+    // Use upsert to handle unique constraint - update if exists, create if not
+    await this.prisma.refreshToken.upsert({
+      where: { userId },
+      update: {
+        token,
+        expiresAt,
+      },
+      create: {
         userId,
         token,
         expiresAt,

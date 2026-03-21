@@ -1,5 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreateEscortServiceDto } from './dto/create-escort-service.dto';
+import { UpdateEscortServiceDto } from './dto/update-escort-service.dto';
+import { ServiceType } from '@prisma/client';
 
 export interface EscortSearchQuery {
   keyword?: string;
@@ -386,5 +389,430 @@ export class EscortsService {
       where: { userId },
       data: { latitude, longitude },
     });
+  }
+
+  // ==================== Escort Service Publishing ====================
+
+  /**
+   * Create a new escort service publishing
+   */
+  async createService(escortId: string, dto: CreateEscortServiceDto) {
+    // Validate date range
+    const startDate = new Date(dto.startDate);
+    const endDate = new Date(dto.endDate);
+    
+    if (startDate > endDate) {
+      throw new BadRequestException('Start date must be before end date');
+    }
+
+    // Validate time slots
+    for (const slot of dto.timeSlots) {
+      if (slot.start >= slot.end) {
+        throw new BadRequestException('Time slot start must be before end');
+      }
+    }
+
+    const service = await this.prisma.escortService.create({
+      data: {
+        escortId,
+        serviceType: dto.serviceType,
+        title: dto.title,
+        description: dto.description,
+        pricePerHour: dto.pricePerHour,
+        startDate,
+        endDate,
+        availableWeekdays: dto.availableWeekdays,
+        timeSlots: dto.timeSlots as any,
+        hospitalIds: dto.hospitalIds || [],
+        areas: dto.areas || [],
+        tags: dto.tags || [],
+        maxDailyOrders: dto.maxDailyOrders || 3,
+        isActive: true,
+      },
+    });
+
+    return service;
+  }
+
+  /**
+   * Get all services published by an escort
+   */
+  async getEscortServices(escortId: string) {
+    const services = await this.prisma.escortService.findMany({
+      where: { escortId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: { bookings: true },
+        },
+      },
+    });
+
+    return services.map(service => ({
+      ...service,
+      bookingCount: service._count.bookings,
+    }));
+  }
+
+  /**
+   * Get all active services (for patients to browse)
+   */
+  async getAllActiveServices(query: {
+    serviceType?: ServiceType;
+    area?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      isActive: true,
+      startDate: { lte: new Date() },
+      endDate: { gte: new Date() },
+    };
+
+    if (query.serviceType) {
+      where.serviceType = query.serviceType;
+    }
+
+    if (query.area) {
+      where.areas = { has: query.area };
+    }
+
+    if (query.minPrice !== undefined || query.maxPrice !== undefined) {
+      where.pricePerHour = {};
+      if (query.minPrice !== undefined) {
+        where.pricePerHour.gte = query.minPrice;
+      }
+      if (query.maxPrice !== undefined) {
+        where.pricePerHour.lte = query.maxPrice;
+      }
+    }
+
+    const [services, total] = await Promise.all([
+      this.prisma.escortService.findMany({
+        where,
+        include: {
+          escort: {
+            include: {
+              escortProfile: true,
+              profile: true,
+            },
+          },
+          _count: {
+            select: { bookings: { where: { status: 'booked' } } },
+          },
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.escortService.count({ where }),
+    ]);
+
+    return {
+      data: services.map(service => ({
+        id: service.id,
+        serviceType: service.serviceType,
+        title: service.title,
+        description: service.description,
+        pricePerHour: service.pricePerHour,
+        startDate: service.startDate,
+        endDate: service.endDate,
+        availableWeekdays: service.availableWeekdays,
+        timeSlots: service.timeSlots,
+        areas: service.areas,
+        tags: service.tags,
+        escort: {
+          id: service.escort.id,
+          name: service.escort.profile?.name || 'Unknown',
+          rating: service.escort.escortProfile?.rating || 0,
+          completedOrders: service.escort.escortProfile?.completedOrders || 0,
+          isCertified: service.escort.escortProfile?.isVerified || false,
+          specialties: service.escort.escortProfile?.specialties || [],
+          imageUrl: service.escort.profile?.avatarUrl,
+          bio: service.escort.escortProfile?.bio,
+        },
+        bookedCount: service._count.bookings,
+      })),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Get a single service by ID
+   */
+  async getServiceById(serviceId: string) {
+    const service = await this.prisma.escortService.findUnique({
+      where: { id: serviceId },
+      include: {
+        escort: {
+          include: {
+            escortProfile: true,
+            profile: true,
+          },
+        },
+        _count: {
+          select: { bookings: { where: { status: 'booked' } } },
+        },
+      },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    return {
+      ...service,
+      escort: {
+        id: service.escort.id,
+        name: service.escort.profile?.name || 'Unknown',
+        rating: service.escort.escortProfile?.rating || 0,
+        completedOrders: service.escort.escortProfile?.completedOrders || 0,
+        isCertified: service.escort.escortProfile?.isVerified || false,
+        specialties: service.escort.escortProfile?.specialties || [],
+        imageUrl: service.escort.profile?.avatarUrl,
+        bio: service.escort.escortProfile?.bio,
+      },
+      bookedCount: service._count.bookings,
+    };
+  }
+
+  /**
+   * Update a service
+   */
+  async updateService(escortId: string, serviceId: string, dto: UpdateEscortServiceDto) {
+    const service = await this.prisma.escortService.findUnique({
+      where: { id: serviceId },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    if (service.escortId !== escortId) {
+      throw new ForbiddenException('You can only update your own services');
+    }
+
+    // Validate date range if provided
+    if (dto.startDate && dto.endDate) {
+      const startDate = new Date(dto.startDate);
+      const endDate = new Date(dto.endDate);
+      if (startDate > endDate) {
+        throw new BadRequestException('Start date must be before end date');
+      }
+    }
+
+    const updated = await this.prisma.escortService.update({
+      where: { id: serviceId },
+      data: {
+        ...(dto.serviceType && { serviceType: dto.serviceType }),
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.pricePerHour && { pricePerHour: dto.pricePerHour }),
+        ...(dto.startDate && { startDate: new Date(dto.startDate) }),
+        ...(dto.endDate && { endDate: new Date(dto.endDate) }),
+        ...(dto.availableWeekdays && { availableWeekdays: dto.availableWeekdays }),
+        ...(dto.timeSlots && { timeSlots: dto.timeSlots as any }),
+        ...(dto.hospitalIds && { hospitalIds: dto.hospitalIds }),
+        ...(dto.areas && { areas: dto.areas }),
+        ...(dto.tags && { tags: dto.tags }),
+        ...(dto.maxDailyOrders && { maxDailyOrders: dto.maxDailyOrders }),
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Toggle service active status
+   */
+  async toggleServiceStatus(escortId: string, serviceId: string) {
+    const service = await this.prisma.escortService.findUnique({
+      where: { id: serviceId },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    if (service.escortId !== escortId) {
+      throw new ForbiddenException('You can only toggle your own services');
+    }
+
+    const updated = await this.prisma.escortService.update({
+      where: { id: serviceId },
+      data: { isActive: !service.isActive },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Delete a service
+   */
+  async deleteService(escortId: string, serviceId: string) {
+    const service = await this.prisma.escortService.findUnique({
+      where: { id: serviceId },
+      include: {
+        _count: {
+          select: { bookings: { where: { status: 'booked' } } },
+        },
+      },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    if (service.escortId !== escortId) {
+      throw new ForbiddenException('You can only delete your own services');
+    }
+
+    if (service._count.bookings > 0) {
+      throw new BadRequestException('Cannot delete service with active bookings');
+    }
+
+    await this.prisma.escortService.delete({
+      where: { id: serviceId },
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Get available time slots for a service on a specific date
+   */
+  async getServiceAvailability(serviceId: string, date: string) {
+    const service = await this.prisma.escortService.findUnique({
+      where: { id: serviceId },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    const queryDate = new Date(date);
+    const weekday = queryDate.getDay() || 7; // Convert Sunday (0) to 7
+
+    // Check if service is available on this weekday
+    if (!service.availableWeekdays.includes(weekday)) {
+      return {
+        available: false,
+        reason: 'Service not available on this day',
+        slots: [],
+      };
+    }
+
+    // Check if date is within service date range
+    if (queryDate < service.startDate || queryDate > service.endDate) {
+      return {
+        available: false,
+        reason: 'Date outside service period',
+        slots: [],
+      };
+    }
+
+    // Get existing bookings for this date
+    const existingBookings = await this.prisma.serviceBooking.findMany({
+      where: {
+        serviceId,
+        bookingDate: queryDate,
+        status: 'booked',
+      },
+    });
+
+    // Calculate available slots
+    const timeSlots = service.timeSlots as Array<{ start: string; end: string }>;
+    const availableSlots = timeSlots.map(slot => {
+      const isBooked = existingBookings.some(
+        booking => booking.startTime === slot.start && booking.endTime === slot.end
+      );
+      return {
+        ...slot,
+        available: !isBooked,
+      };
+    });
+
+    return {
+      available: true,
+      slots: availableSlots,
+    };
+  }
+
+  /**
+   * Book a service slot
+   */
+  async bookServiceSlot(
+    serviceId: string,
+    patientId: string,
+    bookingData: {
+      date: string;
+      startTime: string;
+      endTime: string;
+      orderId: string;
+    }
+  ) {
+    const service = await this.prisma.escortService.findUnique({
+      where: { id: serviceId },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    if (!service.isActive) {
+      throw new BadRequestException('Service is not active');
+    }
+
+    const bookingDate = new Date(bookingData.date);
+
+    // Check if slot is already booked
+    const existingBooking = await this.prisma.serviceBooking.findFirst({
+      where: {
+        serviceId,
+        bookingDate,
+        startTime: bookingData.startTime,
+        endTime: bookingData.endTime,
+        status: 'booked',
+      },
+    });
+
+    if (existingBooking) {
+      throw new BadRequestException('This time slot is already booked');
+    }
+
+    // Check daily booking limit
+    const dailyBookings = await this.prisma.serviceBooking.count({
+      where: {
+        serviceId,
+        bookingDate,
+        status: 'booked',
+      },
+    });
+
+    if (dailyBookings >= service.maxDailyOrders) {
+      throw new BadRequestException('Daily booking limit reached for this service');
+    }
+
+    const booking = await this.prisma.serviceBooking.create({
+      data: {
+        serviceId,
+        orderId: bookingData.orderId,
+        bookingDate,
+        startTime: bookingData.startTime,
+        endTime: bookingData.endTime,
+        status: 'booked',
+      },
+    });
+
+    return booking;
   }
 }
