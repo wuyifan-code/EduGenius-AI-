@@ -1,7 +1,8 @@
 {
-  "name": "medimate",
+  "name": "medimate-smart-escort",
+  "description": "基于多模态数据协同的智慧医疗陪护全流程管理系统",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

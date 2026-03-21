@@ -15,6 +15,11 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { HealthModule } from './modules/health/health.module';
 
+// 算法架构引擎与核心服务
+import { KnowledgeGraphModule } from './modules/knowledge-graph/knowledge-graph.module';
+import { DigitalEvidenceModule } from './modules/digital-evidence/digital-evidence.module';
+import { NarrativeMedicineModule } from './modules/narrative-medicine/narrative-medicine.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -40,6 +45,9 @@ import { HealthModule } from './modules/health/health.module';
     ReviewsModule,
     NotificationsModule,
     UploadsModule,
+    KnowledgeGraphModule,
+    DigitalEvidenceModule,
+    NarrativeMedicineModule,
   ],
 })
 export class AppModule {}
