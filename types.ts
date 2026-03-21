@@ -32,9 +32,21 @@ export interface Order {
   price: number;
 }
 
-export type PageType = 'home' | 'explore' | 'notifications' | 'messages' | 'saved' | 'profile' | 'settings' | 'login' | 'admin';
+export type PageType = 'home' | 'explore' | 'notifications' | 'messages' | 'saved' | 'profile' | 'settings' | 'login' | 'register' | 'admin';
 
 export type Language = 'zh' | 'en';
+
+export interface UserInfo {
+  id: string;
+  email: string;
+  role: UserRole;
+  profile?: {
+    name?: string;
+    phone?: string;
+    avatarUrl?: string;
+    bio?: string;
+  };
+}
 
 // API Response Types
 export interface ApiResponse<T = any> {
@@ -78,4 +90,52 @@ export interface HospitalSearchParams {
   department?: string;
   city?: string;
   level?: string;
+  minRating?: number;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+// Escort search params
+export interface EscortSearchParams {
+  keyword?: string;
+  specialty?: string;
+  minRating?: number;
+  maxPrice?: number;
+  minPrice?: number;
+  latitude?: number;
+  longitude?: number;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+// Search suggestion
+export interface SearchSuggestion {
+  id: string;
+  name: string;
+  type: 'hospital' | 'escort';
+  subtitle?: string;
+  address?: string;
+  rating?: number;
+  hourlyRate?: number;
+}
+
+// Paginated response
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// Search history item
+export interface SearchHistoryItem {
+  id: string;
+  query: string;
+  type: 'hospital' | 'escort' | 'all';
+  timestamp: number;
 }

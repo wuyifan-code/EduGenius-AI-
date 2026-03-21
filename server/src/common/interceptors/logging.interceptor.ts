@@ -13,25 +13,19 @@ import { Request, Response } from 'express';
 export class LoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger('HTTP');
 
-  intercept(context: ExecutionContext): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const ctx = context.switchToHttp();
     const request = ctx.getRequest<Request>();
     const response = ctx.getResponse<Response>();
     const { method, url } = request;
     const startTime = Date.now();
 
-    return new Observable((observer) => {
-      observer.next(undefined);
-      observer.complete();
-
-      response.on('finish', () => {
+    return next.handle().pipe(
+      tap(() => {
         const { statusCode } = response;
         const duration = Date.now() - startTime;
-
-        this.logger.log(
-          `${method} ${url} ${statusCode} - ${duration}ms`,
-        );
-      });
-    });
+        this.logger.log(`${method} ${url} ${statusCode} - ${duration}ms`);
+      }),
+    );
   }
 }

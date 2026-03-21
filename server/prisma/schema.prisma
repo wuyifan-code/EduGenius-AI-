@@ -20,12 +20,15 @@ enum UserRole {
 }
 
 enum OrderStatus {
-  PENDING
-  CONFIRMED
-  MATCHED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
+  PENDING      // 待支付
+  PAID         // 已支付
+  CONFIRMED    // 已确认
+  MATCHED      // 已匹配陪诊师
+  IN_PROGRESS  // 服务中
+  COMPLETED    // 已完成
+  CANCELLED    // 已取消
+  REFUNDING    // 退款中
+  REFUNDED     // 已退款
 }
 
 enum ServiceType {
@@ -40,6 +43,15 @@ enum PaymentStatus {
   COMPLETED
   REFUNDED
   FAILED
+}
+
+enum RefundStatus {
+  PENDING    // 待审核
+  APPROVED   // 审核通过
+  REJECTED   // 审核拒绝
+  PROCESSING // 退款处理中
+  COMPLETED  // 退款完成
+  FAILED     // 退款失败
 }
 
 enum PaymentMethod {
@@ -149,15 +161,22 @@ model Service {
 // 订单表
 model Order {
   id            String      @id @default(uuid())
+  orderNo       String      @unique @default(uuid()) @map("order_no")
   patientId     String      @map("patient_id")
   escortId      String?     @map("escort_id")
-  hospitalId    String      @map("hospital_id")
-  serviceId     String      @map("service_id")
+  hospitalId    String?     @map("hospital_id")
+  serviceId     String?     @map("service_id")
   serviceType   ServiceType @map("service_type")
   status        OrderStatus @default(PENDING)
   price         Float
+  duration      Int         @default(1) // 服务时长（小时）
+  couponCode    String?     @map("coupon_code")
+  couponDiscount Float?     @default(0) @map("coupon_discount")
+  platformFee   Float       @default(10) @map("platform_fee")
+  totalAmount   Float       @map("total_amount")
   paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
   appointmentDate DateTime?  @map("appointment_date")
+  appointmentTime String?    @map("appointment_time")
   notes         String?
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
@@ -165,11 +184,12 @@ model Order {
   // Relations
   patient     User     @relation("PatientOrders", fields: [patientId], references: [id])
   escort      User?    @relation("EscortOrders", fields: [escortId], references: [id])
-  hospital    Hospital @relation(fields: [hospitalId], references: [id])
-  service     Service  @relation(fields: [serviceId], references: [id])
+  hospital    Hospital? @relation(fields: [hospitalId], references: [id])
+  service     Service?  @relation(fields: [serviceId], references: [id])
   messages    Message[]
   reviews     Review[]
   payment     Payment?
+  statusHistory OrderStatusHistory[]
 
   // Indexes for common queries
   @@index([patientId])
@@ -177,18 +197,29 @@ model Order {
   @@index([status])
   @@index([createdAt])
   @@index([paymentStatus])
+  @@index([orderNo])
   @@map("orders")
+}
+
+// 消息类型枚举
+enum MessageType {
+  TEXT
+  IMAGE
+  ORDER
+  SYSTEM
 }
 
 // 消息表
 model Message {
-  id             String   @id @default(uuid())
-  orderId        String?  @map("order_id")
-  senderId       String   @map("sender_id")
-  receiverId     String   @map("receiver_id")
+  id             String      @id @default(uuid())
+  orderId        String?     @map("order_id")
+  senderId       String      @map("sender_id")
+  receiverId     String      @map("receiver_id")
   content        String
-  isRead         Boolean  @default(false) @map("is_read")
-  createdAt      DateTime @default(now()) @map("created_at")
+  type           MessageType @default(TEXT)
+  imageUrl       String?     @map("image_url")
+  isRead         Boolean     @default(false) @map("is_read")
+  createdAt      DateTime    @default(now()) @map("created_at")
 
   // Relations
   order   Order?  @relation(fields: [orderId], references: [id])
@@ -198,7 +229,9 @@ model Message {
   // Indexes
   @@index([senderId])
   @@index([receiverId])
+  @@index([orderId])
   @@index([createdAt])
+  @@index([isRead])
   @@map("messages")
 }
 
@@ -242,15 +275,63 @@ model Payment {
   status        PaymentStatus @default(PENDING)
   stripePaymentIntentId String? @unique @map("stripe_payment_intent_id")
   wechatOrderId  String?  @unique @map("wechat_order_id")
+  wechatPrepayId String?  @unique @map("wechat_prepay_id")
   paidAt        DateTime? @map("paid_at")
   refundedAt    DateTime? @map("refunded_at")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  // Relation
+  // Relations
   order Order @relation(fields: [orderId], references: [id])
+  refunds Refund[]
 
   @@map("payments")
+}
+
+// 退款记录表
+model Refund {
+  id            String        @id @default(uuid())
+  paymentId     String        @map("payment_id")
+  orderId       String        @map("order_id")
+  userId        String        @map("user_id")
+  amount        Float         // 退款金额 (分)
+  reason        String        // 退款原因
+  reasonType    String        @map("reason_type") // escort_cancelled, dissatisfied, schedule_conflict, other
+  description   String?       // 退款说明
+  status        RefundStatus  @default(PENDING)
+  reviewedBy    String?       @map("reviewed_by") // 审核人ID
+  reviewedAt    DateTime?     @map("reviewed_at")
+  reviewNote    String?       @map("review_note") // 审核备注
+  wechatRefundId String?      @unique @map("wechat_refund_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("refunds")
+}
+
+// 订单状态历史表
+model OrderStatusHistory {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+  status    String   // 状态值
+  note      String?  // 备注
+  createdBy String?  @map("created_by") // 操作人ID
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relation
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("order_status_history")
 }
 
 // 通知表

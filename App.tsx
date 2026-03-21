@@ -1,15 +1,20 @@
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Header } from './components/Header';
 import { Login } from './components/Login';
+import { Register } from './components/Register';
 import { Settings } from './components/Settings';
 import { Explore } from './components/Explore';
 import { Notifications } from './components/Notifications';
 import { Messages } from './components/Messages';
 import { Profile } from './components/Profile';
+import { SearchResults } from './components/SearchResults';
+import { SearchBar } from './components/SearchBar';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { UserRole, PageType, Language } from './types';
+import { UserRole, PageType, Language, UserInfo, Hospital, EscortProfile } from './types';
 import { Search, MoreHorizontal, Mail, FileText, Home, Plus, X, Settings as SettingsIcon, Share, BrainCircuit, Loader2 } from 'lucide-react';
 import { apiService } from './services/apiService';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { MessageProvider, useMessages } from './contexts/MessageContext';
 
 // Lazy load heavy components
 const PatientDashboard = lazy(() => import('./components/PatientDashboard').then(m => ({ default: m.PatientDashboard })));
@@ -23,20 +28,73 @@ const PageLoader = () => (
   </div>
 );
 
-const App: React.FC = () => {
+// Inner App component that uses message context
+const AppContent: React.FC = () => {
+  const { unreadCount } = useMessages();
+  return <AppWithMessages unreadCount={unreadCount} />;
+};
+
+// Main app component with message badge support
+const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => {
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [role, setRole] = useState<UserRole>(UserRole.GUEST);
   const [currentPage, setCurrentPage] = useState<PageType>('home');
   const [lang, setLang] = useState<Language>('zh');
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'recommend' | 'nearby'>('recommend');
-  
+
+  // Search state
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [popularHospitals, setPopularHospitals] = useState<Hospital[]>([]);
+  const [popularEscorts, setPopularEscorts] = useState<EscortProfile[]>([]);
+
   // Auto-login on app load
   useEffect(() => {
-    const user = apiService.getUser();
-    if (user) {
-      setRole(user.role);
-    }
+    const initAuth = async () => {
+      if (apiService.isLoggedIn()) {
+        try {
+          const userData = apiService.getUser();
+          if (userData) {
+            setUser(userData);
+            setRole(userData.role);
+            try {
+              const fullProfile = await apiService.getUserProfile();
+              if (fullProfile) {
+                setUser({
+                  ...userData,
+                  profile: {
+                    name: fullProfile.name,
+                    phone: fullProfile.phone,
+                    avatarUrl: fullProfile.avatar_url,
+                    bio: fullProfile.bio
+                  }
+                });
+              }
+            } catch (profileError) {
+              console.log('Using cached user data');
+            }
+          }
+        } catch (error) {
+          console.log('Failed to restore session');
+        }
+      }
+    };
+    initAuth();
   }, []);
+
+  const handleLogout = async () => {
+    await apiService.logout();
+    setUser(null);
+    setRole(UserRole.GUEST);
+    setCurrentPage('home');
+  };
+
+  const handleLoginSuccess = (userData: UserInfo) => {
+    setUser(userData);
+    setRole(userData.role);
+    setCurrentPage('home');
+  };
   
   // Close drawer on route change
   useEffect(() => {
@@ -46,6 +104,35 @@ const App: React.FC = () => {
   const handleInteract = (featureName: string) => {
     console.log(`User interacted with: ${featureName}`);
   };
+
+  // Handle search
+  const handleSearch = (query: string, type: 'hospital' | 'escort' | 'all') => {
+    setSearchQuery(query);
+    setIsSearchMode(true);
+  };
+
+  // Handle back from search
+  const handleSearchBack = () => {
+    setIsSearchMode(false);
+    setSearchQuery('');
+  };
+
+  // Load popular data
+  useEffect(() => {
+    const loadPopularData = async () => {
+      try {
+        const [hospitals, escorts] = await Promise.all([
+          apiService.getPopularHospitals(5),
+          apiService.getPopularEscorts(5),
+        ]);
+        setPopularHospitals(hospitals);
+        setPopularEscorts(escorts);
+      } catch (error) {
+        console.error('Failed to load popular data:', error);
+      }
+    };
+    loadPopularData();
+  }, []);
 
   const translations = useMemo(() => ({
     zh: {
@@ -104,88 +191,130 @@ const App: React.FC = () => {
     return (
       <aside className="hidden lg:block w-[350px] pl-8 py-4 sticky top-0 h-screen overflow-y-auto no-scrollbar">
              {/* Search */}
-             <div className="sticky top-0 bg-white pb-3 z-30">
-               <div className="group relative">
-                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                   <Search className="h-5 w-5 text-slate-400 group-focus-within:text-teal-500" />
-                 </div>
-                 <input 
-                   type="text" 
-                   placeholder={t.search}
-                   className="bg-slate-100 w-full rounded-full py-3 pl-12 pr-4 text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:bg-white border border-transparent focus:border-teal-500 transition-all"
-                   onClick={() => handleInteract('Search')}
-                 />
-               </div>
+             <div className="sticky top-0 bg-white dark:bg-slate-900 pb-3 z-30">
+               <SearchBar
+                 lang={lang}
+                 onSearch={handleSearch}
+                 placeholder={t.search}
+               />
              </div>
 
              {/* Trends -> Popular Hospitals */}
-             <div className="bg-slate-50 rounded-2xl overflow-hidden mb-4 border border-slate-100">
-                <h2 className="text-xl font-black px-4 py-3">{t.popular}</h2>
-                {[
-                  { tag: lang === 'zh' ? '北京' : 'Beijing', title: lang === 'zh' ? '北京协和医院' : 'Peking Union Medical College', posts: `5,203 ${t.orders}` },
-                  { tag: lang === 'zh' ? '上海' : 'Shanghai', title: lang === 'zh' ? '复旦大学附属华山医院' : 'Huashan Hospital', posts: `2,100 ${t.orders}` },
-                  { tag: lang === 'zh' ? '广州' : 'Guangzhou', title: lang === 'zh' ? '中山大学附属第一医院' : 'First Affiliated Hospital', posts: `10.5K ${t.orders}` },
-                ].map((item, idx) => (
-                  <div 
-                    key={idx} 
-                    className="px-4 py-3 hover:bg-slate-100 cursor-pointer transition-colors relative"
-                    onClick={() => handleInteract(`Hospital: ${item.title}`)}
-                  >
-                     <div className="flex justify-between text-xs text-slate-500">
-                        <span>{item.tag} · 三甲</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                     </div>
-                     <div className="font-bold text-slate-900 my-0.5">{item.title}</div>
-                     <div className="text-xs text-slate-500">{item.posts}</div>
-                  </div>
-                ))}
+             <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl overflow-hidden mb-4 border border-slate-100 dark:border-slate-700">
+                <h2 className="text-xl font-black px-4 py-3 text-slate-900 dark:text-white">{t.popular}</h2>
+                {popularHospitals.length > 0 ? (
+                  popularHospitals.map((hospital, idx) => (
+                    <div
+                      key={hospital.id}
+                      className="px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors relative"
+                      onClick={() => handleSearch(hospital.name, 'hospital')}
+                    >
+                       <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                          <span>{hospital.level} · {hospital.department}</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                       </div>
+                       <div className="font-bold text-slate-900 dark:text-white my-0.5">{hospital.name}</div>
+                       <div className="text-xs text-slate-500 dark:text-slate-400">{hospital.rating} ⭐</div>
+                    </div>
+                  ))
+                ) : (
+                  // Fallback static data
+                  [
+                    { tag: lang === 'zh' ? '北京' : 'Beijing', title: lang === 'zh' ? '北京协和医院' : 'Peking Union Medical College', posts: `5,203 ${t.orders}` },
+                    { tag: lang === 'zh' ? '上海' : 'Shanghai', title: lang === 'zh' ? '复旦大学附属华山医院' : 'Huashan Hospital', posts: `2,100 ${t.orders}` },
+                    { tag: lang === 'zh' ? '广州' : 'Guangzhou', title: lang === 'zh' ? '中山大学附属第一医院' : 'First Affiliated Hospital', posts: `10.5K ${t.orders}` },
+                  ].map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors relative"
+                      onClick={() => handleInteract(`Hospital: ${item.title}`)}
+                    >
+                       <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                          <span>{item.tag} · 三甲</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                       </div>
+                       <div className="font-bold text-slate-900 dark:text-white my-0.5">{item.title}</div>
+                       <div className="text-xs text-slate-500 dark:text-slate-400">{item.posts}</div>
+                    </div>
+                  ))
+                )}
              </div>
 
               {/* Who to follow -> Top Escorts */}
-             <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
-                <h2 className="text-xl font-black px-4 py-3">{t.topEscorts}</h2>
-                {[
-                  { name: lang === 'zh' ? '王淑芬' : 'Wang', handle: '@wang_pro', avatar: 'https://picsum.photos/100/100?random=20' },
-                  { name: lang === 'zh' ? '张伟' : 'Zhang', handle: '@zhang_expert', avatar: 'https://picsum.photos/100/100?random=21' },
-                ].map((item, idx) => (
-                  <div 
-                    key={idx} 
-                    className="px-4 py-3 hover:bg-slate-100 cursor-pointer transition-colors flex items-center justify-between"
-                    onClick={() => handleInteract(`Profile: ${item.handle}`)}
-                  >
-                     <div className="flex items-center gap-3">
-                        <img src={item.avatar} alt={item.name} className="h-10 w-10 rounded-full bg-slate-300" />
-                        <div className="leading-tight">
-                           <div className="font-bold hover:underline">{item.name}</div>
-                           <div className="text-slate-500 text-sm">{item.handle}</div>
-                        </div>
-                     </div>
-                     <button 
-                       className="bg-black text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-slate-800"
-                       onClick={(e) => { e.stopPropagation(); handleInteract(`Book ${item.handle}`); }}
-                     >
-                        {t.book}
-                     </button>
-                  </div>
-                ))}
+             <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-700">
+                <h2 className="text-xl font-black px-4 py-3 text-slate-900 dark:text-white">{t.topEscorts}</h2>
+                {popularEscorts.length > 0 ? (
+                  popularEscorts.map((escort) => (
+                    <div
+                      key={escort.id}
+                      className="px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors flex items-center justify-between"
+                      onClick={() => handleSearch(escort.name, 'escort')}
+                    >
+                       <div className="flex items-center gap-3">
+                          <img src={escort.imageUrl || `https://picsum.photos/100/100?random=${escort.id}`} alt={escort.name} className="h-10 w-10 rounded-full bg-slate-300" />
+                          <div className="leading-tight">
+                             <div className="font-bold hover:underline text-slate-900 dark:text-white">{escort.name}</div>
+                             <div className="text-slate-500 dark:text-slate-400 text-sm">{escort.rating} ⭐ · {escort.completedOrders} 订单</div>
+                          </div>
+                       </div>
+                       <button
+                         className="bg-black dark:bg-teal-600 text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-slate-800 dark:hover:bg-teal-500"
+                         onClick={(e) => { e.stopPropagation(); handleSearch(escort.name, 'escort'); }}
+                       >
+                          {t.book}
+                       </button>
+                    </div>
+                  ))
+                ) : (
+                  // Fallback static data
+                  [
+                    { name: lang === 'zh' ? '王淑芬' : 'Wang', handle: '@wang_pro', avatar: 'https://picsum.photos/100/100?random=20' },
+                    { name: lang === 'zh' ? '张伟' : 'Zhang', handle: '@zhang_expert', avatar: 'https://picsum.photos/100/100?random=21' },
+                  ].map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors flex items-center justify-between"
+                      onClick={() => handleInteract(`Profile: ${item.handle}`)}
+                    >
+                       <div className="flex items-center gap-3">
+                          <img src={item.avatar} alt={item.name} className="h-10 w-10 rounded-full bg-slate-300" />
+                          <div className="leading-tight">
+                             <div className="font-bold hover:underline text-slate-900 dark:text-white">{item.name}</div>
+                             <div className="text-slate-500 dark:text-slate-400 text-sm">{item.handle}</div>
+                          </div>
+                       </div>
+                       <button
+                         className="bg-black dark:bg-teal-600 text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-slate-800 dark:hover:bg-teal-500"
+                         onClick={(e) => { e.stopPropagation(); handleInteract(`Book ${item.handle}`); }}
+                       >
+                          {t.book}
+                       </button>
+                    </div>
+                  ))
+                )}
              </div>
       </aside>
     );
   };
 
   const renderMainContent = () => {
+    // Search mode - show search results
+    if (isSearchMode) {
+      return <SearchResults lang={lang} onBack={handleSearchBack} initialQuery={searchQuery} />;
+    }
+
     // Top-level page overrides
     switch (currentPage) {
       case 'settings':
         return <Settings currentLang={lang} setLang={setLang} onBack={() => setCurrentPage('home')} />;
       case 'explore':
-        return <Explore lang={lang} />;
+        return <Explore lang={lang} user={user} />;
       case 'notifications':
-        return <Notifications lang={lang} />;
+        return <Notifications lang={lang} user={user} />;
       case 'messages':
-        return <Messages lang={lang} />;
+        return <Messages lang={lang} user={user} />;
       case 'profile':
-        return <Profile lang={lang} role={role} onBack={() => setCurrentPage('home')} />;
+        return <Profile lang={lang} role={role} user={user} onBack={() => setCurrentPage('home')} onLogout={handleLogout} />;
       case 'admin':
         return <Suspense fallback={<PageLoader />}><AdminDashboard lang={lang} /></Suspense>;
       case 'saved':
@@ -195,9 +324,9 @@ const App: React.FC = () => {
     // Home feed based on role
     switch (role) {
       case UserRole.PATIENT:
-        return <Suspense fallback={<PageLoader />}><PatientDashboard lang={lang} /></Suspense>;
+        return <Suspense fallback={<PageLoader />}><PatientDashboard lang={lang} user={user} /></Suspense>;
       case UserRole.ESCORT:
-        return <Suspense fallback={<PageLoader />}><EscortDashboard lang={lang} /></Suspense>;
+        return <Suspense fallback={<PageLoader />}><EscortDashboard lang={lang} user={user} /></Suspense>;
       default:
         // Guest View Feed - Styled like tweets but content is promotional
         return (
@@ -263,38 +392,52 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-    <div className="min-h-screen bg-white text-black font-sans flex justify-center relative">
+    <ThemeProvider>
+    <MessageProvider>
+    <div className="min-h-screen bg-white dark:bg-slate-900 text-black dark:text-white font-sans flex justify-center relative">
 
        {currentPage === 'login' && (
          <Login
            setRole={(r) => { setRole(r); setCurrentPage('home'); }}
            onClose={() => setCurrentPage('home')}
+           onSwitchToRegister={() => setCurrentPage('register')}
+           lang={lang}
+         />
+       )}
+
+       {currentPage === 'register' && (
+         <Register
+           setRole={(r) => { setRole(r); setCurrentPage('home'); }}
+           onClose={() => setCurrentPage('home')}
+           onSwitchToLogin={() => setCurrentPage('login')}
            lang={lang}
          />
        )}
 
        {/* Mobile Drawer */}
-       {mobileDrawerOpen && (
-          <div className="fixed inset-0 z-[60] lg:hidden">
-             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileDrawerOpen(false)}></div>
-             <div className="absolute left-0 top-0 bottom-0 w-[280px] bg-white shadow-2xl overflow-y-auto">
-                <div className="p-4 flex flex-col h-full">
-                   <div className="flex justify-between items-center mb-6">
-                      <div className="font-bold text-xl">{t.accountInfo}</div>
-                      <button onClick={() => setMobileDrawerOpen(false)}><X className="h-6 w-6"/></button>
-                   </div>
-                   <Header 
-                      role={role} 
-                      setRole={setRole} 
-                      currentPage={currentPage} 
-                      setPage={setCurrentPage} 
-                      lang={lang}
-                      onInteract={handleInteract}
-                   />
-                </div>
-             </div>
-          </div>
-       )}
+      {mobileDrawerOpen && (
+         <div className="fixed inset-0 z-[60] lg:hidden">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileDrawerOpen(false)}></div>
+            <div className="absolute left-0 top-0 bottom-0 w-[280px] bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
+               <div className="p-4 flex flex-col h-full">
+                  <div className="flex justify-between items-center mb-6">
+                     <div className="font-bold text-xl text-slate-900 dark:text-white">{t.accountInfo}</div>
+                     <button onClick={() => setMobileDrawerOpen(false)}><X className="h-6 w-6 text-slate-900 dark:text-white"/></button>
+                  </div>
+                  <Header
+                     role={role}
+                     setRole={setRole}
+                     currentPage={currentPage}
+                     setPage={setCurrentPage}
+                     lang={lang}
+                     onInteract={handleInteract}
+                     user={user}
+                     onLogout={handleLogout}
+                  />
+               </div>
+            </div>
+         </div>
+      )}
 
        {/* Mobile Floating Action Button -> Post Request */}
        <div className="fixed bottom-20 right-4 lg:hidden z-40">
@@ -309,22 +452,24 @@ const App: React.FC = () => {
        <div className="flex w-full max-w-[1300px]">
           {/* Desktop Left Sidebar */}
           <header className="hidden lg:flex w-[80px] xl:w-[275px] flex-shrink-0 px-2 flex-col items-end xl:items-start sticky top-0 h-screen overflow-y-auto no-scrollbar py-2 z-50">
-             <Header 
-                role={role} 
-                setRole={setRole} 
-                currentPage={currentPage} 
-                setPage={setCurrentPage} 
+             <Header
+                role={role}
+                setRole={setRole}
+                currentPage={currentPage}
+                setPage={setCurrentPage}
                 lang={lang}
                 onInteract={handleInteract}
+                user={user}
+                onLogout={handleLogout}
              />
           </header>
 
           {/* Main Content Area */}
-          <main className="flex-1 min-w-0 border-x border-slate-100 max-w-[600px] w-full">
+          <main className="flex-1 min-w-0 border-x border-slate-100 dark:border-slate-800 max-w-[600px] w-full">
              
              {/* Desktop Sticky Header */}
-             <div className="hidden lg:flex sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 h-[53px] items-center justify-between cursor-pointer" onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}>
-                <h1 className="text-xl font-bold text-slate-900">
+             <div className="hidden lg:flex sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 px-4 h-[53px] items-center justify-between cursor-pointer" onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}>
+                <h1 className="text-xl font-bold text-slate-900 dark:text-white">
                   {currentPage === 'home' ? t.services : (
                     currentPage === 'explore' ? (lang === 'zh' ? '探索' : 'Explore') :
                     currentPage === 'notifications' ? (lang === 'zh' ? '通知' : 'Notifications') :
@@ -336,41 +481,41 @@ const App: React.FC = () => {
              </div>
 
              {/* Mobile Sticky Header */}
-             <div className="lg:hidden sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100 transition-transform duration-200">
+             <div className="lg:hidden sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 transition-transform duration-200">
                 {/* Top Row: Avatar - Logo - Settings */}
                 <div className="flex justify-between items-center px-4 h-[53px]">
                    <div onClick={() => setMobileDrawerOpen(true)} className="cursor-pointer">
-                      <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-sm border border-slate-300">
+                      <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 font-bold text-sm border border-slate-300 dark:border-slate-600">
                          {role === UserRole.GUEST ? t.guestName : role === UserRole.PATIENT ? t.patientName : t.escortName}
                       </div>
                    </div>
-                   <div className="h-6 w-6 text-black" onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}>
+                   <div className="h-6 w-6 text-black dark:text-white" onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}>
                       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6 fill-current">
                         <path d="M4 4h4l4 10 4-10h4v16h-4V11l-4 9-4-9v9H4V4z"/>
                       </svg>
                    </div>
                    <div onClick={() => setCurrentPage('settings')} className="cursor-pointer">
-                      <SettingsIcon className="h-5 w-5 text-slate-900" />
+                      <SettingsIcon className="h-5 w-5 text-slate-900 dark:text-white" />
                    </div>
                 </div>
 
                 {/* Tab Row - Only on Home */}
                 {currentPage === 'home' && (
-                  <div className="flex border-b border-slate-100">
+                  <div className="flex border-b border-slate-100 dark:border-slate-800">
                      <div 
-                       className="flex-1 flex justify-center hover:bg-slate-100 cursor-pointer transition-colors relative"
+                       className="flex-1 flex justify-center hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors relative"
                        onClick={() => setActiveTab('recommend')}
                      >
-                        <div className={`py-3 font-bold text-sm ${activeTab === 'recommend' ? 'text-black' : 'text-slate-500'}`}>
+                        <div className={`py-3 font-bold text-sm ${activeTab === 'recommend' ? 'text-black dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
                            {t.recommend}
                            {activeTab === 'recommend' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-teal-500 rounded-full"></div>}
                         </div>
                      </div>
                      <div 
-                       className="flex-1 flex justify-center hover:bg-slate-100 cursor-pointer transition-colors relative"
+                       className="flex-1 flex justify-center hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors relative"
                        onClick={() => setActiveTab('nearby')}
                      >
-                        <div className={`py-3 font-bold text-sm ${activeTab === 'nearby' ? 'text-black' : 'text-slate-500'}`}>
+                        <div className={`py-3 font-bold text-sm ${activeTab === 'nearby' ? 'text-black dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
                            {t.nearby}
                            {activeTab === 'nearby' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-teal-500 rounded-full"></div>}
                         </div>
@@ -386,28 +531,48 @@ const App: React.FC = () => {
        </div>
        
        {/* Mobile Bottom Nav */}
-       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 flex justify-between px-6 py-3 lg:hidden z-50 pb-safe">
+       <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex justify-between px-6 py-3 lg:hidden z-50 pb-safe">
          <div className="cursor-pointer" onClick={() => setCurrentPage('home')}>
-            <Home className={`h-7 w-7 ${currentPage === 'home' ? 'fill-black text-black' : 'text-slate-900'}`} strokeWidth={currentPage === 'home' ? 2.5 : 2} />
+            <Home className={`h-7 w-7 ${currentPage === 'home' ? 'fill-black dark:fill-white text-black dark:text-white' : 'text-slate-900 dark:text-slate-300'}`} strokeWidth={currentPage === 'home' ? 2.5 : 2} />
          </div>
-         <div className="cursor-pointer text-slate-900" onClick={() => setCurrentPage('explore')}>
-            <Search className={`h-7 w-7 ${currentPage === 'explore' ? 'fill-black text-black' : 'text-slate-900'}`} strokeWidth={currentPage === 'explore' ? 3 : 2} />
+         <div className="cursor-pointer text-slate-900 dark:text-slate-300" onClick={() => setCurrentPage('explore')}>
+            <Search className={`h-7 w-7 ${currentPage === 'explore' ? 'fill-black dark:fill-white text-black dark:text-white' : 'text-slate-900 dark:text-slate-300'}`} strokeWidth={currentPage === 'explore' ? 3 : 2} />
          </div>
-         <div className="cursor-pointer text-slate-900" onClick={() => handleInteract('AI Assistant')}>
+         <div className="cursor-pointer text-slate-900 dark:text-slate-300" onClick={() => handleInteract('AI Assistant')}>
             {/* AI Assistant Icon */}
-            <div className="h-7 w-7 border-2 border-teal-600 rounded-md flex items-center justify-center relative bg-teal-50">
-               <BrainCircuit className="h-4 w-4 text-teal-700" />
+            <div className="h-7 w-7 border-2 border-teal-600 rounded-md flex items-center justify-center relative bg-teal-50 dark:bg-teal-900/30">
+               <BrainCircuit className="h-4 w-4 text-teal-700 dark:text-teal-400" />
             </div>
          </div>
-         <div className="cursor-pointer text-slate-900" onClick={() => setCurrentPage('notifications')}>
-             <FileText className={`h-7 w-7 ${currentPage === 'notifications' ? 'fill-black text-black' : 'text-slate-900'}`} />
+         <div className="cursor-pointer text-slate-900 dark:text-slate-300" onClick={() => setCurrentPage('notifications')}>
+             <FileText className={`h-7 w-7 ${currentPage === 'notifications' ? 'fill-black dark:fill-white text-black dark:text-white' : 'text-slate-900 dark:text-slate-300'}`} />
          </div>
-         <div className="cursor-pointer text-slate-900" onClick={() => setCurrentPage('messages')}>
-             <Mail className={`h-7 w-7 ${currentPage === 'messages' ? 'fill-black text-black' : 'text-slate-900'}`} />
+         <div className="cursor-pointer text-slate-900 dark:text-slate-300 relative" onClick={() => setCurrentPage('messages')}>
+             <Mail className={`h-7 w-7 ${currentPage === 'messages' ? 'fill-black dark:fill-white text-black dark:text-white' : 'text-slate-900 dark:text-slate-300'}`} />
+             {unreadCount > 0 && (
+               <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-4 rounded-full flex items-center justify-center px-1">
+                 {unreadCount > 99 ? '99+' : unreadCount}
+               </div>
+             )}
          </div>
        </div>
 
     </div>
+    </MessageProvider>
+    </ThemeProvider>
+    </ErrorBoundary>
+  );
+};
+
+// Main App component wrapped with MessageProvider
+const App: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <ThemeProvider>
+        <MessageProvider>
+          <AppContent />
+        </MessageProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 };

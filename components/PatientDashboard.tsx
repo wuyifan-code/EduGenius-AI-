@@ -1,20 +1,63 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getHealthTriage } from '../services/geminiService';
 import { apiService } from '../services/apiService';
-import { EscortProfile, Language } from '../types';
-import { MapPin, MessageCircle, Repeat2, Heart, BarChart2, Share, Image as ImageIcon, Smile, CalendarClock, BriefcaseMedical, MoreHorizontal, AlertCircle, RefreshCw } from 'lucide-react';
+import { EscortProfile, Language, UserInfo } from '../types';
+import { MapPin, MessageCircle, Repeat2, Heart, BarChart2, Share, Image as ImageIcon, Smile, CalendarClock, BriefcaseMedical, MoreHorizontal, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 
 interface PatientDashboardProps {
   lang: Language;
+  user?: UserInfo | null;
 }
 
-export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang }) => {
+// Pull to refresh hook
+const usePullToRefresh = (onRefresh: () => Promise<void>) => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const startY = useRef(0);
+  const isDragging = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startY.current = e.touches[0].clientY;
+    isDragging.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging.current) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - startY.current;
+    if (diff > 0 && window.scrollY === 0) {
+      setPullDistance(Math.min(diff * 0.5, 80));
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    isDragging.current = false;
+    if (pullDistance > 60) {
+      setIsRefreshing(true);
+      setPullDistance(0);
+      await onRefresh();
+      setIsRefreshing(false);
+    } else {
+      setPullDistance(0);
+    }
+  };
+
+  return { isRefreshing, pullDistance, handleTouchStart, handleTouchMove, handleTouchEnd };
+};
+
+export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang, user }) => {
   const [symptoms, setSymptoms] = useState('');
   const [aiAdvice, setAiAdvice] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [escorts, setEscorts] = useState<EscortProfile[]>([]);
   const [escortsLoading, setEscortsLoading] = useState(true);
   const [escortsError, setEscortsError] = useState('');
+
+  const refreshData = async () => {
+    await loadEscorts();
+  };
+
+  const { isRefreshing, pullDistance, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(refreshData);
   
   const t = {
     zh: {
@@ -148,7 +191,24 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ lang }) => {
   ];
 
   return (
-    <div className="pb-24">
+    <div
+      className="pb-24"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull to refresh indicator */}
+      <div
+        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center transition-transform duration-200"
+        style={{ transform: `translateY(${pullDistance}px)`, height: pullDistance > 0 ? '60px' : '0' }}
+      >
+        {isRefreshing ? (
+          <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
+        ) : (
+          <RefreshCw className="h-6 w-6 text-slate-400" style={{ opacity: pullDistance / 60 }} />
+        )}
+      </div>
+
       <div className="border-b border-slate-100 p-4">
         <div className="flex gap-3">
           <img src="https://picsum.photos/100/100?random=50" className="h-10 w-10 rounded-full bg-slate-200" alt="Me" />

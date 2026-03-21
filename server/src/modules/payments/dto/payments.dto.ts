@@ -34,3 +34,67 @@ export class RefundDto {
   @IsNumber()
   amount?: number;
 }
+
+export class CreateRefundDto {
+  @ApiProperty()
+  @IsString()
+  orderId: string;
+
+  @ApiProperty()
+  @IsString()
+  reason: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reasonType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  amount?: number;
+}
+
+export class ApproveRefundDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class RejectRefundDto {
+  @ApiProperty()
+  @IsString()
+  reason: string;
+}
+
+export class WechatNotifyDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  create_time: string;
+
+  @ApiProperty()
+  resource_type: string;
+
+  @ApiProperty()
+  event_type: string;
+
+  @ApiProperty()
+  summary: string;
+
+  @ApiProperty()
+  resource: {
+    original_type: string;
+    algorithm: string;
+    ciphertext: string;
+    associated_data: string;
+    nonce: string;
+  };
+}

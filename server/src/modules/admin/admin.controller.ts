@@ -142,4 +142,117 @@ export class AdminController {
   ) {
     return this.adminService.verifyEscort(escortId, body.approved, body.reason);
   }
+
+  // ============ User Edit ============
+
+  @Patch('users/:userId')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Update user information' })
+  async updateUser(
+    @Param('userId') userId: string,
+    @Body() body: { name?: string; phone?: string; role?: string; isActive?: boolean },
+  ) {
+    return this.adminService.updateUser(userId, body);
+  }
+
+  // ============ Order Cancel ============
+
+  @Post('orders/:orderId/cancel')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Cancel order (Admin)' })
+  async cancelOrder(
+    @Param('orderId') orderId: string,
+    @Body() body: { reason?: string },
+    @Request() req: any,
+  ) {
+    return this.adminService.cancelOrder(orderId, req.user.sub, body.reason);
+  }
+
+  // ============ Statistics Export ============
+
+  @Get('statistics/users')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Get user statistics' })
+  async getUserStats(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.adminService.getUserStats(startDate, endDate);
+  }
+
+  @Get('statistics/orders')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Get order statistics' })
+  async getOrderStats(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.adminService.getOrderStats(startDate, endDate);
+  }
+
+  @Get('statistics/revenue')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Get revenue statistics with trends' })
+  async getRevenueStatistics(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const end = endDate || new Date().toISOString();
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    return this.adminService.getRevenueStats(start, end);
+  }
+
+  @Get('export/:type')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Export data to CSV/Excel' })
+  async exportData(
+    @Param('type') type: 'users' | 'orders' | 'escorts',
+    @Query('format') format: 'csv' | 'excel' = 'csv',
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.adminService.exportData(type, format, startDate, endDate);
+  }
+
+  // ============ Refund Management ============
+
+  @Get('refunds')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Get all refund requests' })
+  async getRefunds(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+  ) {
+    return this.adminService.getRefunds(page, limit, status);
+  }
+
+  @Get('refunds/:refundId')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Get refund details' })
+  async getRefund(@Param('refundId') refundId: string) {
+    return this.adminService.getRefundById(refundId);
+  }
+
+  @Patch('refunds/:refundId/approve')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Approve refund request' })
+  async approveRefund(
+    @Param('refundId') refundId: string,
+    @Body() body: { note?: string },
+    @Request() req: any,
+  ) {
+    return this.adminService.approveRefund(refundId, req.user.sub, body.note);
+  }
+
+  @Patch('refunds/:refundId/reject')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Reject refund request' })
+  async rejectRefund(
+    @Param('refundId') refundId: string,
+    @Body() body: { note?: string },
+    @Request() req: any,
+  ) {
+    return this.adminService.rejectRefund(refundId, req.user.sub, body.note);
+  }
 }

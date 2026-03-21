@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import { UserRole, PageType, Language } from '../types';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { UserRole, PageType, Language, UserInfo } from '../types';
+import { apiService } from '../services/apiService';
+import { useMessages } from '../contexts/MessageContext';
 import {
   Home,
   Search,
-  Bell,
   Mail,
   Bookmark,
   User,
@@ -12,7 +13,6 @@ import {
   Settings,
   HelpCircle,
   LogOut,
-  Stethoscope,
   FileText,
   Shield
 } from 'lucide-react';
@@ -24,10 +24,25 @@ interface HeaderProps {
   setPage: (page: PageType) => void;
   lang: Language;
   onInteract: (msg: string) => void;
+  user?: UserInfo | null;
+  onLogout?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setPage, lang, onInteract }) => {
+export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setPage, lang, onInteract, user: userProp, onLogout }) => {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [notificationUnread, setNotificationUnread] = useState(0);
+  const { unreadCount: messageUnread, refreshUnreadCount } = useMessages();
+
+  const user = useMemo(() => {
+    if (userProp) {
+      return userProp;
+    }
+    if (role !== UserRole.GUEST) {
+      const storedUser = apiService.getUser();
+      return storedUser as UserInfo | null;
+    }
+    return null;
+  }, [userProp, role]);
 
   const translations = useMemo(() => ({
     zh: {
@@ -72,14 +87,58 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
 
   const t = translations[lang];
 
+  const fetchNotificationCount = useCallback(async () => {
+    if (role === UserRole.GUEST) {
+      setNotificationUnread(0);
+      return;
+    }
+
+    try {
+      const notificationsData = await apiService.getNotifications(1, 1, true);
+      setNotificationUnread(notificationsData?.total || 0);
+    } catch (error) {
+      console.error('Failed to fetch notification count:', error);
+    }
+  }, [role]);
+
+  useEffect(() => {
+    fetchNotificationCount();
+    const interval = setInterval(fetchNotificationCount, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotificationCount]);
+
+  const renderBadge = (count: number, onClick?: () => void) => {
+    if (count <= 0) return null;
+
+    return (
+      <span
+        onClick={onClick}
+        className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-xs font-bold text-white rounded-full shadow-md cursor-pointer transition-transform hover:scale-110 ${
+          count > 99 ? 'px-1' : 'px-1.5'
+        } bg-red-500`}
+      >
+        {count > 99 ? '99+' : count}
+      </span>
+    );
+  };
+
+  const renderDotBadge = (onClick?: () => void) => {
+    return (
+      <span
+        onClick={onClick}
+        className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full shadow-md cursor-pointer hover:scale-110 transition-transform"
+      />
+    );
+  };
+
   // Map X icons to Medical context but keep the visual weight
   const navItems = [
-    { id: 'home', icon: Home, label: t.home }, // Main Feed
-    { id: 'explore', icon: Search, label: t.explore }, // Search Hospitals
-    { id: 'notifications', icon: FileText, label: t.notifications }, // Orders (was Bell)
-    { id: 'messages', icon: Mail, label: t.messages }, // Chat
-    { id: 'saved', icon: Bookmark, label: t.saved }, // Saved Escorts
-    { id: 'profile', icon: User, label: t.profile }, // Profile
+    { id: 'home', icon: Home, label: t.home },
+    { id: 'explore', icon: Search, label: t.explore },
+    { id: 'notifications', icon: FileText, label: t.notifications, badge: notificationUnread, onBadgeClick: () => setPage('notifications') },
+    { id: 'messages', icon: Mail, label: t.messages, badge: messageUnread, onBadgeClick: () => setPage('messages') },
+    { id: 'saved', icon: Bookmark, label: t.saved },
+    { id: 'profile', icon: User, label: t.profile },
   ];
 
   const handleNavClick = (id: string) => {
@@ -91,10 +150,10 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
       <div className="space-y-1 w-full">
         {/* Logo M - Click to refresh home */}
         <div 
-          className="flex items-center cursor-pointer p-3 w-min rounded-full hover:bg-slate-100 transition-colors mb-2" 
+          className="flex items-center cursor-pointer p-3 w-min rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mb-2" 
           onClick={() => setPage('home')}
         >
-           <div className="h-8 w-8 text-black">
+           <div className="h-8 w-8 text-black dark:text-white">
               {/* Custom M Logo */}
               <svg viewBox="0 0 24 24" aria-hidden="true" className="h-8 w-8 fill-current">
                 <path d="M4 4h4l4 10 4-10h4v16h-4V11l-4 9-4-9v9H4V4z"/>
@@ -108,9 +167,18 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
             <div 
               key={item.id}
               onClick={() => handleNavClick(item.id)}
-              className={`flex items-center gap-4 p-3 rounded-full cursor-pointer hover:bg-slate-100 transition-colors group w-max xl:w-full ${currentPage === item.id ? 'font-bold' : ''}`}
+              className={`flex items-center gap-4 p-3 rounded-full cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group w-max xl:w-full ${currentPage === item.id ? 'font-bold' : ''}`}
             >
-              <item.icon className={`h-7 w-7 ${currentPage === item.id ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <div className="relative">
+                <item.icon className={`h-7 w-7 ${currentPage === item.id ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+                {'badge' in item && item.badge !== undefined && (
+                  item.badge > 0 ? (
+                    renderBadge(item.badge, item.onBadgeClick)
+                  ) : (
+                    renderDotBadge(item.onBadgeClick)
+                  )
+                )}
+              </div>
               <span className="hidden xl:block text-xl mr-4">{item.label}</span>
             </div>
           ))}
@@ -118,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
           {/* More Menu Trigger */}
           <div className="relative">
             <div 
-              className="flex items-center gap-4 p-3 rounded-full cursor-pointer hover:bg-slate-100 transition-colors group w-max xl:w-full"
+              className="flex items-center gap-4 p-3 rounded-full cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group w-max xl:w-full"
               onClick={() => setShowMoreMenu(!showMoreMenu)}
             >
               <MoreHorizontal className="h-7 w-7" />
@@ -127,29 +195,29 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
 
             {/* Dropdown Menu */}
             {showMoreMenu && (
-              <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.1)] border border-slate-100 overflow-hidden z-50">
+              <div className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.1)] border border-slate-100 dark:border-slate-700 overflow-hidden z-50">
                 {role === UserRole.ADMIN && (
                   <div
-                    className="flex items-center gap-3 p-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                    className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
                     onClick={() => { setPage('admin'); setShowMoreMenu(false); }}
                   >
                     <Shield className="h-5 w-5 text-teal-600" />
-                    <span className="font-bold text-slate-900">{t.admin}</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{t.admin}</span>
                   </div>
                 )}
                 <div
-                  className="flex items-center gap-3 p-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
                   onClick={() => { setPage('settings'); setShowMoreMenu(false); }}
                 >
                   <Settings className="h-5 w-5" />
-                  <span className="font-bold text-slate-900">{t.settings}</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{t.settings}</span>
                 </div>
                 <div
-                  className="flex items-center gap-3 p-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
                   onClick={() => { onInteract('Help Center'); setShowMoreMenu(false); }}
                 >
                   <HelpCircle className="h-5 w-5" />
-                  <span className="font-bold text-slate-900">{t.help}</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{t.help}</span>
                 </div>
               </div>
             )}
@@ -174,30 +242,34 @@ export const Header: React.FC<HeaderProps> = ({ role, setRole, currentPage, setP
       {/* User Profile Bubble */}
       <div className="mt-auto w-full mb-4">
         {role !== UserRole.GUEST ? (
-          <div 
-            className="flex items-center gap-3 p-3 rounded-full hover:bg-slate-100 cursor-pointer w-full transition-colors relative group"
+          <div
+            className="flex items-center gap-3 p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer w-full transition-colors relative group"
             onClick={() => {
                const confirmLogout = window.confirm(t.logout + '?');
-               if (confirmLogout) setRole(UserRole.GUEST);
+               if (confirmLogout && onLogout) {
+                 onLogout();
+               } else if (confirmLogout) {
+                 setRole(UserRole.GUEST);
+               }
             }}
           >
-             <img src="https://picsum.photos/100/100?random=50" className="h-10 w-10 rounded-full bg-slate-200" alt="User" />
+             <img src={user?.profile?.avatarUrl || "https://picsum.photos/100/100?random=50"} className="h-10 w-10 rounded-full bg-slate-200" alt="User" />
              <div className="hidden xl:block flex-1 leading-tight">
-               <div className="font-bold text-slate-900">{role === UserRole.PATIENT ? 'User_9527' : 'Escort Wang'}</div>
-               <div className="text-slate-500 text-sm">@{role === UserRole.PATIENT ? 'patient' : 'wang_escort'}</div>
+               <div className="font-bold text-slate-900 dark:text-white">{user?.profile?.name || (role === UserRole.PATIENT ? 'User_9527' : 'Escort Wang')}</div>
+               <div className="text-slate-500 dark:text-slate-400 text-sm">@{user?.email?.split('@')[0] || (role === UserRole.PATIENT ? 'patient' : 'wang_escort')}</div>
              </div>
              <LogOut className="hidden xl:block h-5 w-5 text-slate-400 group-hover:text-red-500" />
           </div>
         ) : (
-          <div 
-            className="flex items-center gap-3 p-3 rounded-full hover:bg-slate-100 cursor-pointer w-full transition-colors" 
+          <div
+            className="flex items-center gap-3 p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer w-full transition-colors"
             onClick={() => setPage('login')}
           >
-             <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
+             <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
                <User className="h-6 w-6" />
              </div>
              <div className="hidden xl:block flex-1">
-               <div className="font-bold text-slate-900">{t.guest}</div>
+               <div className="font-bold text-slate-900 dark:text-white">{t.guest}</div>
              </div>
           </div>
         )}

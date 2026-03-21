@@ -6,8 +6,8 @@ services:
     image: postgres:16-alpine
     container_name: medimate-db
     environment:
-      POSTGRES_USER: medimate
-      POSTGRES_PASSWORD: medimate_dev_password
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: medimate
     ports:
       - "5432:5432"
@@ -26,7 +26,7 @@ services:
       dockerfile: Dockerfile
     container_name: medimate-api
     environment:
-      DATABASE_URL: postgresql://medimate:medimate_dev_password@postgres:5432/medimate
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medimate
       JWT_SECRET: ${JWT_SECRET:-medimate_dev_secret_key_change_in_production}
       JWT_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d

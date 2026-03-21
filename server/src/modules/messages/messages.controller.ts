@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { MessagesService } from './messages.service';
+import { MessagesService, SendMessageDto } from './messages.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Messages')
@@ -13,14 +13,34 @@ export class MessagesController {
   @Get('conversations')
   @ApiOperation({ summary: 'Get all conversations with unread counts' })
   async getConversations(@Request() req: any) {
-    return this.messagesService.getConversations(req.user.sub);
+    const conversations = await this.messagesService.getConversations(req.user.sub);
+    return {
+      success: true,
+      data: conversations,
+    };
   }
 
   @Get('unread-count')
   @ApiOperation({ summary: 'Get total unread message count' })
   async getUnreadCount(@Request() req: any) {
     const count = await this.messagesService.getUnreadCount(req.user.sub);
-    return { unreadCount: count };
+    return {
+      success: true,
+      data: { count },
+    };
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search messages' })
+  async searchMessages(
+    @Request() req: any,
+    @Query('q') query: string,
+  ) {
+    const messages = await this.messagesService.searchMessages(req.user.sub, query);
+    return {
+      success: true,
+      data: messages,
+    };
   }
 
   @Get(':partnerId')
@@ -28,19 +48,39 @@ export class MessagesController {
   async getConversation(
     @Request() req: any,
     @Param('partnerId') partnerId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     // Mark conversation as read when opening
     await this.messagesService.markConversationAsRead(req.user.sub, partnerId);
-    return this.messagesService.findConversation(req.user.sub, partnerId);
+
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+
+    const messages = await this.messagesService.findConversation(
+      req.user.sub,
+      partnerId,
+      pageNum,
+      limitNum,
+    );
+
+    return {
+      success: true,
+      data: messages,
+    };
   }
 
   @Post()
   @ApiOperation({ summary: 'Send a message' })
   async send(
     @Request() req: any,
-    @Body() data: { receiverId: string; content: string; orderId?: string },
+    @Body() data: SendMessageDto,
   ) {
-    return this.messagesService.send(req.user.sub, data.receiverId, data.content, data.orderId);
+    const message = await this.messagesService.send(req.user.sub, data);
+    return {
+      success: true,
+      data: message,
+    };
   }
 
   @Patch(':messageId/read')
@@ -49,7 +89,11 @@ export class MessagesController {
     @Request() req: any,
     @Param('messageId') messageId: string,
   ) {
-    return this.messagesService.markAsRead(messageId, req.user.sub);
+    await this.messagesService.markAsRead(messageId, req.user.sub);
+    return {
+      success: true,
+      message: 'Message marked as read',
+    };
   }
 
   @Patch('conversations/:partnerId/read')
@@ -58,7 +102,23 @@ export class MessagesController {
     @Request() req: any,
     @Param('partnerId') partnerId: string,
   ) {
-    await this.messagesService.markConversationAsRead(req.user.sub, partnerId);
-    return { success: true };
+    const result = await this.messagesService.markConversationAsRead(req.user.sub, partnerId);
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  @Delete(':messageId')
+  @ApiOperation({ summary: 'Delete a message' })
+  async deleteMessage(
+    @Request() req: any,
+    @Param('messageId') messageId: string,
+  ) {
+    await this.messagesService.deleteMessage(messageId, req.user.sub);
+    return {
+      success: true,
+      message: 'Message deleted',
+    };
   }
 }

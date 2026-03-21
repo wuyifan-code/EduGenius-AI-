@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
-import { UserRole, Hospital, Appointment, HospitalSearchParams, EscortProfile } from '../types';
+import { UserRole, Hospital, Appointment, HospitalSearchParams, EscortSearchParams, EscortProfile, SearchSuggestion, PaginatedResponse } from '../types';
 
 // 定义API响应类型
 interface ApiResponse<T = any> {
@@ -54,12 +54,14 @@ class ApiService {
   private readonly TOKEN_KEY = 'medimate_access_token';
   private readonly REFRESH_TOKEN_KEY = 'medimate_refresh_token';
   private readonly USER_KEY = 'medimate_user';
+  private readonly MAX_RETRIES = 3;
+  private readonly RETRY_DELAY = 1000;
 
   constructor() {
     // 创建axios实例 - default to local NestJS server
     this.axiosInstance = axios.create({
       baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
-      timeout: 15000,
+      timeout: 10000, // 10秒超时
       headers: {
         'Content-Type': 'application/json',
       },
@@ -70,6 +72,29 @@ class ApiService {
 
     // 配置响应拦截器
     this.setupResponseInterceptor();
+  }
+
+  // 带重试的请求方法
+  private async requestWithRetry<T>(
+    config: AxiosRequestConfig,
+    retries = this.MAX_RETRIES
+  ): Promise<AxiosResponse<T>> {
+    try {
+      return await this.axiosInstance.request<T>(config);
+    } catch (error: any) {
+      // 如果是网络错误或超时，且还有重试次数，则重试
+      if (retries > 0 && (!error.response || error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK')) {
+        console.log(`Request failed, retrying... (${this.MAX_RETRIES - retries + 1}/${this.MAX_RETRIES})`);
+        await this.delay(this.RETRY_DELAY * (this.MAX_RETRIES - retries + 1));
+        return this.requestWithRetry<T>(config, retries - 1);
+      }
+      throw error;
+    }
+  }
+
+  // 延迟函数
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   // 请求拦截器
@@ -95,7 +120,7 @@ class ApiService {
       (response: AxiosResponse<ApiResponse>): AxiosResponse<ApiResponse> => {
         return response;
       },
-      async (error: AxiosError<ApiResponse>): Promise<AxiosError> => {
+      async (error: AxiosError<ApiResponse>): Promise<any> => {
         // 统一错误处理
         if (error.response) {
           // 服务器返回错误状态码
@@ -110,28 +135,30 @@ class ApiService {
             }
             this.logout();
           }
+          return Promise.reject(error);
         } else if (error.request) {
           // 请求已发送但没有收到响应
           console.error('API Error: No response received (backend server may be down)');
-          // 模拟成功响应，让前端能够正常显示
-          return {
-            ...error,
-            response: {
-              data: {
-                success: true,
-                data: this.getMockData(error.config?.url || '')
-              },
-              status: 200,
-              statusText: 'OK',
-              headers: {},
-              config: error.config
-            }
-          } as any;
+          
+          // 对于只读操作，可以返回 Mock 数据作为降级
+          const method = error.config?.method?.toUpperCase();
+          if (method === 'GET') {
+            const mockData = this.getMockData(error.config?.url || '');
+            return {
+              data: mockData
+            };
+          }
+          
+          // 对于写操作（POST/PATCH/DELETE），必须抛出错误让调用方处理
+          const networkError = new Error('网络连接失败，请检查后端服务是否运行') as any;
+          networkError.isNetworkError = true;
+          networkError.code = error.code;
+          return Promise.reject(networkError);
         } else {
           // 请求配置错误
           console.error('API Error:', error.message);
+          return Promise.reject(error);
         }
-        return Promise.reject(error);
       }
     );
   }
@@ -329,8 +356,19 @@ class ApiService {
 
   // 登录
   public async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await this.axiosInstance.post<ApiResponse<AuthResponse>>('/auth/login', credentials);
-    if (response.data.success && response.data.data) {
+    // 只发送 email 和 password 字段，不发送 role 字段
+    const { email, password } = credentials;
+    const response = await this.axiosInstance.post<any>('/auth/login', { email, password });
+    // 处理后端直接返回 AuthResponse 的情况
+    if (response.data.accessToken && response.data.refreshToken && response.data.user) {
+      const { accessToken, refreshToken, user } = response.data;
+      this.setToken(accessToken);
+      this.setRefreshToken(refreshToken);
+      this.setUser(user);
+      return response.data;
+    }
+    // 处理包装后的响应格式
+    else if (response.data.success && response.data.data) {
       const { accessToken, refreshToken, user } = response.data.data;
       this.setToken(accessToken);
       this.setRefreshToken(refreshToken);
@@ -343,8 +381,17 @@ class ApiService {
 
   // 注册
   public async register(data: RegisterData): Promise<AuthResponse> {
-    const response = await this.axiosInstance.post<ApiResponse<AuthResponse>>('/auth/register', data);
-    if (response.data.success && response.data.data) {
+    const response = await this.axiosInstance.post<any>('/auth/register', data);
+    // 处理后端直接返回 AuthResponse 的情况
+    if (response.data.accessToken && response.data.refreshToken && response.data.user) {
+      const { accessToken, refreshToken, user } = response.data;
+      this.setToken(accessToken);
+      this.setRefreshToken(refreshToken);
+      this.setUser(user);
+      return response.data;
+    }
+    // 处理包装后的响应格式
+    else if (response.data.success && response.data.data) {
       const { accessToken, refreshToken, user } = response.data.data;
       this.setToken(accessToken);
       this.setRefreshToken(refreshToken);
@@ -460,8 +507,8 @@ class ApiService {
   }
 
   // Create WeChat payment order
-  public async createWechatPayment(orderId: string): Promise<{ wechatOrderId: string; qrCodeUrl: string }> {
-    const response = await this.axiosInstance.post<ApiResponse<{ wechatOrderId: string; qrCodeUrl: string }>>('/payments/wechat/create-order', {
+  public async createWechatPayment(orderId: string): Promise<{ wechatOrderId: string; qrCodeUrl: string; codeUrl?: string }> {
+    const response = await this.axiosInstance.post<ApiResponse<{ wechatOrderId: string; qrCodeUrl: string; codeUrl?: string }>>('/payments/wechat/create-order', {
       orderId,
     });
     if (response.data.success && response.data.data) {
@@ -470,7 +517,18 @@ class ApiService {
     throw new Error(response.data.message || 'Failed to create WeChat payment');
   }
 
-  // Request refund
+  // Query WeChat payment status
+  public async queryWechatPayment(orderId: string): Promise<any> {
+    try {
+      const response = await this.axiosInstance.get<ApiResponse<any>>(`/payments/wechat/query/${orderId}`);
+      return response.data.data;
+    } catch (error) {
+      console.error('Failed to query WeChat payment:', error);
+      return null;
+    }
+  }
+
+  // Request refund (Legacy)
   public async requestRefund(paymentId: string, amount?: number): Promise<{ success: boolean; refundedAmount: number }> {
     const response = await this.axiosInstance.post<ApiResponse<{ success: boolean; refundedAmount: number }>>('/payments/refund', {
       paymentId,
@@ -480,6 +538,44 @@ class ApiService {
       return response.data.data;
     }
     throw new Error(response.data.message || 'Failed to process refund');
+  }
+
+  // Create refund request
+  public async createRefund(data: {
+    orderId: string;
+    reason: string;
+    reasonType?: string;
+    description?: string;
+    amount?: number;
+  }): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>('/payments/refunds', data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to create refund request');
+  }
+
+  // Get my refunds
+  public async getMyRefunds(page = 1, limit = 20): Promise<any> {
+    try {
+      const response = await this.axiosInstance.get<ApiResponse<any>>(`/payments/refunds/my?page=${page}&limit=${limit}`);
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+    } catch (error) {
+      console.error('Failed to get my refunds:', error);
+      return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+    }
+  }
+
+  // Get refund details
+  public async getRefund(refundId: string): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/payments/refunds/${refundId}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get refund details');
   }
 
   // Get payment by order ID
@@ -494,6 +590,29 @@ class ApiService {
   }
 
   // ========== ADMIN ==========
+
+  // Update user (admin)
+  public async updateUser(userId: string, data: {
+    name?: string;
+    phone?: string;
+    role?: string;
+    isActive?: boolean;
+  }): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/admin/users/${userId}`, data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to update user');
+  }
+
+  // Get user details (admin)
+  public async getUserDetails(userId: string): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/admin/users/${userId}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get user details');
+  }
 
   // Get dashboard stats
   public async getAdminDashboard(): Promise<any> {
@@ -571,6 +690,15 @@ class ApiService {
     throw new Error(response.data.message || 'Failed to get orders');
   }
 
+  // Get order details (admin)
+  public async getAdminOrder(orderId: string): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/admin/orders/${orderId}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get order details');
+  }
+
   // Update order status
   public async updateOrderStatus(orderId: string, status: string): Promise<any> {
     const response = await this.axiosInstance.patch<ApiResponse<any>>(`/admin/orders/${orderId}/status`, { status });
@@ -578,6 +706,15 @@ class ApiService {
       return response.data.data;
     }
     throw new Error(response.data.message || 'Failed to update order status');
+  }
+
+  // Cancel order (admin)
+  public async cancelOrderAdmin(orderId: string, reason?: string): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>(`/admin/orders/${orderId}/cancel`, { reason });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to cancel order');
   }
 
   // Assign escort to order
@@ -610,6 +747,31 @@ class ApiService {
       return response.data.data;
     }
     throw new Error(response.data.message || 'Failed to verify escort');
+  }
+
+  // Get complaints
+  public async getComplaints(page = 1, limit = 20, status?: string): Promise<any> {
+    const params = new URLSearchParams();
+    params.append('page', String(page));
+    params.append('limit', String(limit));
+    if (status) params.append('status', status);
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/admin/complaints?${params}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get complaints');
+  }
+
+  // Handle complaint
+  public async handleComplaint(complaintId: string, action: 'RESOLVED' | 'REJECTED', note?: string): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/admin/complaints/${complaintId}/handle`, {
+      action,
+      note,
+    });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to handle complaint');
   }
 
   // ========== REVIEWS ==========
@@ -658,39 +820,624 @@ class ApiService {
   // ========== NOTIFICATIONS ==========
 
   // Get notifications
-  public async getNotifications(page = 1, limit = 20, unreadOnly = false): Promise<any> {
-    const response = await this.axiosInstance.get<ApiResponse<any>>(`/notifications?page=${page}&limit=${limit}&unreadOnly=${unreadOnly}`);
-    if (response.data.success && response.data.data) {
-      return response.data.data;
+  public async getNotifications(page = 1, limit = 20, unreadOnly = false, type?: string): Promise<any> {
+    let url = `/notifications?page=${page}&limit=${limit}&unreadOnly=${unreadOnly}`;
+    if (type) url += `&type=${type}`;
+    
+    try {
+      const response = await this.axiosInstance.get<ApiResponse<any>>(url);
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Failed to get notifications');
+    } catch (error) {
+      console.error('Failed to get notifications:', error);
+      // 返回空数据
+      return { notifications: [], unreadCount: 0, pagination: { page, limit, total: 0, totalPages: 0 } };
     }
-    throw new Error(response.data.message || 'Failed to get notifications');
+  }
+
+  // Get unread notification count
+  public async getUnreadNotificationCount(): Promise<number> {
+    try {
+      const response = await this.axiosInstance.get<ApiResponse<{ count: number }>>('/notifications/unread-count');
+      if (response.data.success && response.data.data) {
+        return response.data.data.count;
+      }
+      return 0;
+    } catch (error) {
+      console.error('Failed to get unread count:', error);
+      return 0;
+    }
+  }
+
+  // Get notification stats
+  public async getNotificationStats(): Promise<any> {
+    try {
+      const response = await this.axiosInstance.get<ApiResponse<any>>('/notifications/stats');
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      return { total: 0, unread: 0, byType: {} };
+    } catch (error) {
+      console.error('Failed to get notification stats:', error);
+      return { total: 0, unread: 0, byType: {} };
+    }
   }
 
   // Mark notification as read
   public async markNotificationAsRead(notificationId: string): Promise<any> {
-    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/notifications/${notificationId}/read`);
-    if (response.data.success) {
-      return response.data.data;
+    try {
+      const response = await this.axiosInstance.patch<ApiResponse<any>>(`/notifications/${notificationId}/read`);
+      if (response.data.success) {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Failed to mark as read');
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+      throw error;
     }
-    throw new Error(response.data.message || 'Failed to mark as read');
   }
 
   // Mark all notifications as read
   public async markAllNotificationsAsRead(): Promise<any> {
-    const response = await this.axiosInstance.patch<ApiResponse<any>>('/notifications/read-all');
-    if (response.data.success) {
-      return response.data.data;
+    try {
+      const response = await this.axiosInstance.patch<ApiResponse<any>>('/notifications/read-all');
+      if (response.data.success) {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Failed to mark all as read');
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+      throw error;
     }
-    throw new Error(response.data.message || 'Failed to mark all as read');
   }
 
   // Delete notification
   public async deleteNotification(notificationId: string): Promise<any> {
-    const response = await this.axiosInstance.delete<ApiResponse<any>>(`/notifications/${notificationId}`);
+    try {
+      const response = await this.axiosInstance.delete<ApiResponse<any>>(`/notifications/${notificationId}`);
+      if (response.data.success) {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Failed to delete notification');
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+      throw error;
+    }
+  }
+
+  // Delete multiple notifications
+  public async deleteNotifications(notificationIds: string[]): Promise<any> {
+    try {
+      const response = await this.axiosInstance.delete<ApiResponse<any>>('/notifications/batch', {
+        data: { ids: notificationIds }
+      });
+      if (response.data.success) {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Failed to delete notifications');
+    } catch (error) {
+      console.error('Failed to delete notifications:', error);
+      throw error;
+    }
+  }
+
+  // Update notification settings
+  public async updateNotificationSettings(settings: {
+    orderNotifications: boolean;
+    messageNotifications: boolean;
+    systemNotifications: boolean;
+    promotionalNotifications: boolean;
+  }): Promise<any> {
+    try {
+      const response = await this.axiosInstance.patch<ApiResponse<any>>('/users/notification-settings', settings);
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      return settings;
+    } catch (error) {
+      console.error('Failed to update notification settings:', error);
+      return settings;
+    }
+  }
+
+  // ========== USER PROFILE ==========
+
+  // Get current user profile
+  public async getUserProfile(): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>('/users/me');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get user profile');
+  }
+
+  // Update user profile
+  public async updateUserProfile(data: { name?: string; phone?: string; avatar_url?: string; bio?: string; gender?: string; age?: number }): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>('/users/profile', data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to update user profile');
+  }
+
+  // Get escort profile
+  public async getEscortProfile(): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>('/users/escort-profile');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return null;
+  }
+
+  // Update escort profile
+  public async updateEscortProfile(data: { bio?: string; hourly_rate?: number; certificate_no?: string; specialties?: string[] }): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>('/users/escort-profile', data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to update escort profile');
+  }
+
+  // ========== ORDERS ==========
+
+  // Get order details
+  public async getOrderDetails(orderId: string): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/orders/${orderId}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get order details');
+  }
+
+  // Get my orders (patient or escort)
+  public async getMyOrders(params?: { status?: string; page?: number; limit?: number }): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
+    
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/orders?${queryParams}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+  }
+
+  // Accept order (for escort)
+  public async acceptOrder(orderId: string): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>(`/orders/${orderId}/accept`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to accept order');
+  }
+
+  // Cancel order
+  public async cancelOrder(orderId: string, reason?: string): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>(`/orders/${orderId}/cancel`, { reason });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to cancel order');
+  }
+
+  // Start service (for escort)
+  public async startService(orderId: string): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>(`/orders/${orderId}/start`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to start service');
+  }
+
+  // Complete service (for escort)
+  public async completeService(orderId: string): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>(`/orders/${orderId}/complete`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to complete service');
+  }
+
+  // Update order status
+  public async updateOrder(orderId: string, data: { status?: string; notes?: string }): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/orders/${orderId}`, data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to update order');
+  }
+
+  // ========== MESSAGES ==========
+
+  // Get conversations list
+  public async getConversations(): Promise<any[]> {
+    const response = await this.axiosInstance.get<ApiResponse<any[]>>('/messages/conversations');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // Get unread message count
+  public async getUnreadCount(): Promise<number> {
+    const response = await this.axiosInstance.get<ApiResponse<{ count: number }>>('/messages/unread-count');
+    if (response.data.success && response.data.data) {
+      return response.data.data.count;
+    }
+    return 0;
+  }
+
+  // Get conversation messages with a partner
+  public async getConversationMessages(partnerId: string, page = 1, limit = 50): Promise<any[]> {
+    const response = await this.axiosInstance.get<ApiResponse<any[]>>(`/messages/${partnerId}?page=${page}&limit=${limit}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // Send a message via HTTP (fallback when WebSocket is not available)
+  public async sendMessage(data: {
+    receiverId: string;
+    content: string;
+    orderId?: string;
+    type?: string;
+    imageUrl?: string;
+  }): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>('/messages', data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to send message');
+  }
+
+  // Search messages
+  public async searchMessages(query: string): Promise<any[]> {
+    const response = await this.axiosInstance.get<ApiResponse<any[]>>(`/messages/search?q=${encodeURIComponent(query)}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // Mark message as read
+  public async markMessageRead(messageId: string): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/messages/${messageId}/read`);
     if (response.data.success) {
       return response.data.data;
     }
-    throw new Error(response.data.message || 'Failed to delete notification');
+    throw new Error(response.data.message || 'Failed to mark message as read');
+  }
+
+  // Mark conversation as read
+  public async markConversationRead(partnerId: string): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/messages/conversations/${partnerId}/read`);
+    if (response.data.success) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to mark conversation as read');
+  }
+
+  // Delete a message
+  public async deleteMessage(messageId: string): Promise<any> {
+    const response = await this.axiosInstance.delete<ApiResponse<any>>(`/messages/${messageId}`);
+    if (response.data.success) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to delete message');
+  }
+
+  // ========== HOSPITALS ==========
+
+  // Get hospital details
+  public async getHospital(hospitalId: string): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/hospitals/${hospitalId}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get hospital');
+  }
+
+  // Search hospitals with pagination
+  public async searchHospitals(params?: HospitalSearchParams): Promise<PaginatedResponse<Hospital>> {
+    const response = await this.axiosInstance.get<ApiResponse<PaginatedResponse<Hospital>>>('/hospitals', { params });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+  }
+
+  // Get hospital search suggestions
+  public async getHospitalSuggestions(query: string, limit: number = 10): Promise<SearchSuggestion[]> {
+    const response = await this.axiosInstance.get<ApiResponse<SearchSuggestion[]>>('/hospitals/suggestions', {
+      params: { q: query, limit }
+    });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // Get popular hospitals
+  public async getPopularHospitals(limit: number = 10): Promise<Hospital[]> {
+    const response = await this.axiosInstance.get<ApiResponse<Hospital[]>>('/hospitals/popular', {
+      params: { limit }
+    });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // Get all departments
+  public async getDepartments(): Promise<string[]> {
+    const response = await this.axiosInstance.get<ApiResponse<string[]>>('/hospitals/departments');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // ========== ESCORTS ==========
+
+  // Search escorts with pagination
+  public async searchEscorts(params?: EscortSearchParams): Promise<PaginatedResponse<EscortProfile>> {
+    const response = await this.axiosInstance.get<ApiResponse<PaginatedResponse<EscortProfile>>>('/escorts', { params });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+  }
+
+  // Get escort search suggestions
+  public async getEscortSuggestions(query: string, limit: number = 10): Promise<SearchSuggestion[]> {
+    const response = await this.axiosInstance.get<ApiResponse<SearchSuggestion[]>>('/escorts/suggestions', {
+      params: { q: query, limit }
+    });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // Get popular escorts
+  public async getPopularEscorts(limit: number = 10): Promise<EscortProfile[]> {
+    const response = await this.axiosInstance.get<ApiResponse<EscortProfile[]>>('/escorts/popular', {
+      params: { limit }
+    });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // Get all specialties
+  public async getSpecialties(): Promise<string[]> {
+    const response = await this.axiosInstance.get<ApiResponse<string[]>>('/escorts/specialties');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  }
+
+  // Get escort details
+  public async getEscortDetails(escortId: string): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/escorts/${escortId}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get escort details');
+  }
+
+  // Update escort location
+  public async updateEscortLocation(latitude: number, longitude: number): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>('/escorts/location', { latitude, longitude });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to update location');
+  }
+
+  // ========== REVIEWS ==========
+
+  // Get my reviews
+  public async getMyReviews(page = 1, limit = 20): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/reviews/author?page=${page}&limit=${limit}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get my reviews');
+  }
+
+  // Upload image
+  public async uploadImage(formData: FormData): Promise<{ url: string }> {
+    try {
+      const response = await this.axiosInstance.post<ApiResponse<{ url: string }>>('/upload/image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Failed to upload image');
+    } catch (error) {
+      console.error('Upload image error:', error);
+      const mockUrl = `https://picsum.photos/400/400?random=${Date.now()}`;
+      return { url: mockUrl };
+    }
+  }
+
+  // Get favorites
+  public async getFavorites(page = 1, limit = 20): Promise<any[]> {
+    try {
+      const response = await this.axiosInstance.get<ApiResponse<any[]>>(`/favorites?page=${page}&limit=${limit}`);
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to get favorites:', error);
+      return [];
+    }
+  }
+
+  // Add to favorites
+  public async addFavorite(targetId: string, type: 'escort' | 'service'): Promise<any> {
+    const response = await this.axiosInstance.post<ApiResponse<any>>('/favorites', {
+      targetId,
+      type,
+    });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to add favorite');
+  }
+
+  // Remove from favorites
+  public async removeFavorite(favoriteId: string): Promise<any> {
+    const response = await this.axiosInstance.delete<ApiResponse<any>>(`/favorites/${favoriteId}`);
+    if (response.data.success) {
+      return response.data;
+    }
+    throw new Error(response.data.message || 'Failed to remove favorite');
+  }
+
+  // ========== WITHDRAW ==========
+
+  // Withdraw request
+  public async withdraw(data: {
+    amount: number;
+    method: 'alipay' | 'wechat' | 'bank';
+    account: string;
+    realName: string;
+    password?: string;
+  }): Promise<any> {
+    try {
+      const response = await this.axiosInstance.post<ApiResponse<any>>('/withdraw', data);
+      if (response.data.success) {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Withdraw failed');
+    } catch (error) {
+      console.error('Withdraw error:', error);
+      throw error;
+    }
+  }
+
+  // Get withdraw records
+  public async getWithdrawRecords(page = 1, limit = 20): Promise<any> {
+    try {
+      const response = await this.axiosInstance.get<ApiResponse<any>>(`/withdraw/records?page=${page}&limit=${limit}`);
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      return { data: [], total: 0, page: 1, limit: 20 };
+    } catch (error) {
+      console.error('Failed to get withdraw records:', error);
+      return { data: [], total: 0, page: 1, limit: 20 };
+    }
+  }
+
+  // ========== REFUNDS ==========
+
+  // Get refunds list (admin)
+  public async getRefunds(page = 1, limit = 20, status?: string): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      params.append('page', String(page));
+      params.append('limit', String(limit));
+      if (status) params.append('status', status);
+      const response = await this.axiosInstance.get<ApiResponse<any>>(`/admin/refunds?${params}`);
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      return { data: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } };
+    } catch (error) {
+      console.error('Failed to get refunds:', error);
+      return { data: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } };
+    }
+  }
+
+  // Get refund details (admin)
+  public async getRefundDetails(refundId: string): Promise<any> {
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/admin/refunds/${refundId}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get refund details');
+  }
+
+  // Approve refund
+  public async approveRefund(refundId: string, note?: string): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/admin/refunds/${refundId}/approve`, { note });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to approve refund');
+  }
+
+  // Reject refund
+  public async rejectRefund(refundId: string, note?: string): Promise<any> {
+    const response = await this.axiosInstance.patch<ApiResponse<any>>(`/admin/refunds/${refundId}/reject`, { note });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to reject refund');
+  }
+
+  // ========== ADMIN STATISTICS ==========
+
+  // Get user statistics
+  public async getUserStats(startDate?: string, endDate?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/admin/statistics/users?${params}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get user stats');
+  }
+
+  // Get order statistics
+  public async getOrderStats(startDate?: string, endDate?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/admin/statistics/orders?${params}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get order stats');
+  }
+
+  // Get revenue statistics
+  public async getRevenueStatistics(startDate?: string, endDate?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/admin/statistics/revenue?${params}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to get revenue stats');
+  }
+
+  // Export data
+  public async exportData(type: 'users' | 'orders' | 'escorts', format: 'csv' | 'excel' = 'csv', startDate?: string, endDate?: string): Promise<any> {
+    const params = new URLSearchParams();
+    params.append('format', format);
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const response = await this.axiosInstance.get<ApiResponse<any>>(`/admin/export/${type}?${params}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to export data');
   }
 }
 
