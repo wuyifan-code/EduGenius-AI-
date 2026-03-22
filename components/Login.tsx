@@ -147,13 +147,13 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, onLoginSuccess, 
       onClose();
     } catch (err: any) {
       console.error('Login error:', err);
-      if (err.message === 'timeout') {
-        // 超时时自动以演示模式登录
-        console.warn('API timeout, using demo mode');
+      // 如果是超时或网络错误，自动切换到演示模式
+      if (err.message === 'timeout' || err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK' || !err.response) {
+        console.warn('API unreachable, using demo mode');
         setRole(selectedRole);
         if (onLoginSuccess) {
           onLoginSuccess({
-            id: 'demo-user-001',
+            id: 'demo-user-' + Date.now(),
             email: email,
             role: selectedRole
           });
