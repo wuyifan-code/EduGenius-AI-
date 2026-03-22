@@ -109,17 +109,22 @@ model UserProfile {
 
 // 陪诊师资料表
 model EscortProfile {
-  id              String   @id @default(uuid())
-  userId          String   @unique @map("user_id")
-  rating          Float    @default(0)
-  completedOrders Int      @default(0) @map("completed_orders")
-  isVerified      Boolean  @default(false) @map("is_verified")
-  specialties     String[] // 专长，如 ["儿科", "骨科"]
-  certificateNo   String?  @map("certificate_no") // 证书编号
-  bio             String?
-  hourlyRate      Float?   @map("hourly_rate")
-  latitude        Float? // 纬度
-  longitude       Float? // 经度
+  id                String    @id @default(uuid())
+  userId            String    @unique @map("user_id")
+  rating            Float     @default(0)
+  completedOrders   Int       @default(0) @map("completed_orders")
+  isVerified        Boolean   @default(false) @map("is_verified")
+  specialties       String[]  // 专长，如 ["儿科", "骨科"]
+  certificateNo     String?   @map("certificate_no") // 证书编号
+  bio               String?
+  hourlyRate        Float?    @map("hourly_rate")
+  latitude          Float?    // 纬度
+  longitude         Float?    // 经度
+  // 信任协议相关字段
+  trustScore        Float     @default(0) // 动态信任评分 (0-100)
+  evidenceCount     Int       @default(0) // 累计存证数量
+  lastEvidenceAt    DateTime? @map("last_evidence_at") // 最近存证时间
+  verificationLevel Int       @default(1) // 验证等级 (1-5)
 
   // Relation
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -433,17 +438,23 @@ model ClinicalPathway {
 
 // 信任黑箱：数字信用存证表
 model DigitalEvidence {
-  id        String   @id @default(uuid())
-  orderId   String   @map("order_id")
-  nodeName  String // 对应的路径节点名
-  type      String // audio, gps, photo, emotion
-  url       String? // 存证文件路径
-  content   String? // 特征内容/录音文本
-  createdAt DateTime @default(now()) @map("created_at")
+  id              String    @id @default(uuid())
+  orderId         String    @map("order_id")
+  nodeName        String    // 对应的路径节点名
+  type            String    // audio, gps, photo, emotion
+  url             String?   // 存证文件路径
+  content         String?   // 特征内容/录音文本
+  evidenceHash    String?   @unique // 密码学哈希 (SHA-256)
+  verified        Boolean   @default(false) // 是否验真通过
+  validationScore Float?    // 验证分数 (0-100)
+  metadata        Json?     // 原始元数据 (GPS坐标、文件信息等)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
+  @@index([evidenceHash])
   @@map("digital_evidences")
 }
 

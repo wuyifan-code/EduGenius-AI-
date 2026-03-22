@@ -19,6 +19,7 @@ import { HealthModule } from './modules/health/health.module';
 import { KnowledgeGraphModule } from './modules/knowledge-graph/knowledge-graph.module';
 import { DigitalEvidenceModule } from './modules/digital-evidence/digital-evidence.module';
 import { NarrativeMedicineModule } from './modules/narrative-medicine/narrative-medicine.module';
+import { TrustModule } from './modules/trust/trust.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { NarrativeMedicineModule } from './modules/narrative-medicine/narrative-
     KnowledgeGraphModule,
     DigitalEvidenceModule,
     NarrativeMedicineModule,
+    TrustModule,
   ],
 })
 export class AppModule {}

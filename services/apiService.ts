@@ -1557,6 +1557,71 @@ class ApiService {
     }
     throw new Error(response.data.message || 'Failed to get availability');
   }
+
+  // ========== DIGITAL EVIDENCE (TRUST PROTOCOL) ==========
+
+  // Submit digital evidence
+  public async submitEvidence(data: {
+    orderId: string;
+    nodeName: string;
+    type: string;
+    url?: string;
+    content?: string;
+    metadata?: any;
+  }): Promise<any> {
+    try {
+      const response = await this.axiosInstance.post<ApiResponse<any>>('/digital-evidence/submit', data);
+      if (response.data.success) {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Failed to submit evidence');
+    } catch (error) {
+      console.error('Failed to submit evidence:', error);
+      throw error;
+    }
+  }
+
+  // Get evidences by order
+  public async getEvidencesByOrder(orderId: string): Promise<any[]> {
+    try {
+      const response = await this.axiosInstance.get<ApiResponse<any[]>>(`/digital-evidence/order/${orderId}`);
+      if (response.data.success) {
+        return response.data.data || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to get evidences:', error);
+      return [];
+    }
+  }
+
+  // Verify evidence hash
+  public async verifyEvidence(evidenceId: string): Promise<{ valid: boolean; reason: string }> {
+    try {
+      const response = await this.axiosInstance.post<ApiResponse<any>>(`/digital-evidence/verify/${evidenceId}`);
+      if (response.data.success) {
+        return response.data.data;
+      }
+      return { valid: false, reason: 'Verification failed' };
+    } catch (error) {
+      console.error('Failed to verify evidence:', error);
+      return { valid: false, reason: 'Verification error' };
+    }
+  }
+
+  // Get trust score
+  public async getTrustScore(escortId: string): Promise<any> {
+    try {
+      const response = await this.axiosInstance.get<ApiResponse<any>>(`/trust/score/${escortId}`);
+      if (response.data.success) {
+        return response.data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to get trust score:', error);
+      return null;
+    }
+  }
 }
 
 // 创建并导出单例实例

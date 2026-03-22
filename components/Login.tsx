@@ -34,6 +34,7 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
     zh: {
       title: '登录 MediMate',
       subtitle: '专业的陪诊服务平台',
+      systemVersion: '基于多约束准则的medimate医疗陪护资源动态调度与最优适配系统 V1.0',
       emailLabel: '电子邮箱',
       emailPlaceholder: '请输入邮箱',
       passwordLabel: '密码',
@@ -71,6 +72,7 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
     en: {
       title: 'Login to MediMate',
       subtitle: 'Professional Medical Escort Platform',
+      systemVersion: 'Medimate Medical Escort Resource Dynamic Scheduling and Optimal Matching System V1.0',
       emailLabel: 'Email',
       emailPlaceholder: 'Enter email',
       passwordLabel: 'Password',
@@ -227,7 +229,8 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
 
           <div className="flex-1 px-4">
             <h1 className="text-3xl font-black text-slate-900 mb-2">{t.title}</h1>
-            <p className="text-slate-500 mb-8">{t.subtitle}</p>
+            <p className="text-slate-500 mb-2">{t.subtitle}</p>
+            <p className="text-xs text-slate-400 mb-8 italic">{t.systemVersion}</p>
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-6 flex items-start gap-2">
