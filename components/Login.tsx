@@ -6,10 +6,11 @@ import { apiService } from '../services/apiService';
 interface LoginProps {
   setRole: (role: UserRole) => void;
   onClose: () => void;
+  onLoginSuccess?: (userData: { id: string; email: string; role: UserRole }) => void;
   lang: 'zh' | 'en';
 }
 
-export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
+export const Login: React.FC<LoginProps> = ({ setRole, onClose, onLoginSuccess, lang }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.PATIENT);
@@ -129,6 +130,14 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, lang }) => {
       
       const userRole = response.user?.role || selectedRole;
       setRole(userRole);
+      // Call onLoginSuccess to update user state in parent
+      if (onLoginSuccess && response.user) {
+        onLoginSuccess({
+          id: response.user.id,
+          email: response.user.email,
+          role: response.user.role
+        });
+      }
       onClose();
     } catch (err: any) {
       console.error('Login error:', err);

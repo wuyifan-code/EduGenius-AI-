@@ -58,9 +58,9 @@ class ApiService {
   private readonly RETRY_DELAY = 1000;
 
   constructor() {
-    // 创建axios实例 - default to local NestJS server
+    // 创建axios实例 - 使用相对路径，由 Vite 代理转发到后端
     this.axiosInstance = axios.create({
-      baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
+      baseURL: '/api',
       timeout: 10000, // 10秒超时
       headers: {
         'Content-Type': 'application/json',

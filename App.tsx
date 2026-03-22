@@ -577,6 +577,10 @@ const AppWithMessages: React.FC<{ unreadCount: number }> = ({ unreadCount }) => 
          <Login
            setRole={(r) => { setRole(r); setCurrentPage('home'); }}
            onClose={() => setCurrentPage('home')}
+           onLoginSuccess={(userData) => {
+             setUser(userData);
+             setRole(userData.role);
+           }}
            onSwitchToRegister={() => setCurrentPage('register')}
            lang={lang}
          />

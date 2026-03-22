@@ -275,7 +275,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, onNavigate }
         loadingTimeoutRef.current = null;
       }
 
-      const notifications = data?.notifications || data?.data?.notifications || [];
+      const notifications: Notification[] = (data?.notifications || data?.data?.notifications || []) as Notification[];
 
       if (notifications.length > 0) {
         const normalizedNotifications = notifications.map((n: Record<string, unknown>) => ({
