@@ -122,17 +122,11 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, onLoginSuccess, 
     setError('');
 
     try {
-      // 添加超时处理 - 5秒超时
-      const response = await Promise.race([
-        apiService.login({
-          email,
-          password,
-          role: selectedRole
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('timeout')), 5000)
-        )
-      ]) as any;
+      const response = await apiService.login({
+        email,
+        password,
+        role: selectedRole
+      });
       
       const userRole = response.user?.role || selectedRole;
       setRole(userRole);
@@ -147,20 +141,10 @@ export const Login: React.FC<LoginProps> = ({ setRole, onClose, onLoginSuccess, 
       onClose();
     } catch (err: any) {
       console.error('Login error:', err);
-      // 如果是超时或网络错误，自动切换到演示模式
-      if (err.message === 'timeout' || err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK' || !err.response) {
-        console.warn('API unreachable, using demo mode');
-        setRole(selectedRole);
-        if (onLoginSuccess) {
-          onLoginSuccess({
-            id: 'demo-user-' + Date.now(),
-            email: email,
-            role: selectedRole
-          });
-        }
-        onClose();
-      } else if (err.response?.data?.message) {
+      if (err.response?.data?.message) {
         setError(err.response.data.message);
+      } else if (err.message === 'timeout' || err.code === 'ECONNREFUSED') {
+        setError('服务器连接失败，请稍后重试');
       } else {
         setError(t.networkError);
       }
