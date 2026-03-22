@@ -172,6 +172,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ lang, onNavigate }
   const [clickedId, setClickedId] = useState<string | null>(null);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [useMockData, setUseMockData] = useState(false);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const refreshData = async () => {
