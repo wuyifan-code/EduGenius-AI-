@@ -16,7 +16,7 @@
     "@stripe/react-stripe-js": "^2.4.0",
     "@stripe/stripe-js": "^2.4.0",
     "axios": "^1.13.2",
-    "express": "^5.2.1",
+    "express": "4.21.0",
     "http-proxy-middleware": "^3.0.5",
     "lucide-react": "^0.561.0",
     "react": "^19.2.3",
