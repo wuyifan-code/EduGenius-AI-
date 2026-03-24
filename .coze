@@ -6,5 +6,5 @@ build = ["pnpm", "install"]
 run = ["pnpm", "run", "dev"]
 
 [deploy]
-build = ["pnpm", "install", "&&", "cd", "server", "&&", "pnpm", "install", "&&", "cd", "..", "&&", "pnpm", "run", "build"]
+build = ["pnpm", "install", "&&", "cd", "server", "&&", "pnpm", "install", "&&", "pnpm", "run", "build", "&&", "cd", "..", "&&", "pnpm", "run", "build"]
 run = ["node", "server.js"]
