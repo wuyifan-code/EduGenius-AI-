@@ -14,7 +14,13 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3003'],
+    origin: [
+      'http://localhost:3000', 
+      'http://localhost:3003',
+      'http://localhost:5000',
+      process.env.FRONTEND_URL || '',
+      /\.coze\.site$/,  // Allow all coze.site domains
+    ].filter(Boolean),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
